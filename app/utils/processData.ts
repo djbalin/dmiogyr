@@ -51,9 +51,10 @@ export function processHourlyForecasts(data: DMIAPIResponse): HourlyForecast[] {
 export function getWeatherEmoji(
   cloudCover: number,
   precipitation: number,
+  isNight: boolean = false,
 ): string {
   if (precipitation > 2) return "🌧️";
   if (cloudCover > 75) return "☁️";
-  if (cloudCover > 40) return "⛅";
-  return "☀️";
+  if (cloudCover > 40) return isNight ? "🌑" : "⛅";
+  return isNight ? "🌑" : "☀️";
 }

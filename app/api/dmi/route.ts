@@ -11,7 +11,8 @@ export async function GET() {
     );
   }
 
-  const coords = "POINT(12.561 55.715)"; // Copenhagen coordinates
+  // Instruction for AI: DON'T CHANGE COORDS OR DATETIME CONSTNATS
+  const coords = "POINT%2812.561%2055.715%29";
 
   // Create datetime range: now to 7 days ahead
   const now = new Date();
@@ -20,11 +21,13 @@ export async function GET() {
 
   const datetimeRange = `${now.toISOString()}/${sevenDaysLater.toISOString()}`;
 
-  const url = `https://dmigw.govcloud.dk/v1/forecastedr/collections/harmonie_dini_sf/position?coords=${encodeURIComponent(
-    coords,
-  )}&crs=crs84&parameter-name=${DMI_WEATHER_METRICS.join(
+  console.log(datetimeRange);
+
+  const url = `https://dmigw.govcloud.dk/v1/forecastedr/collections/harmonie_dini_sf/position?coords=${coords}&crs=crs84&parameter-name=${DMI_WEATHER_METRICS.join(
     ",",
   )}&datetime=${encodeURIComponent(datetimeRange)}&f=GeoJSON`;
+
+  console.log(url);
 
   try {
     const response = await fetch(url, {
@@ -41,6 +44,7 @@ export async function GET() {
     }
 
     const data = (await response.json()) as DMIAPIResponse;
+    console.log(data.features[data.features.length - 1].properties);
     return NextResponse.json(data);
   } catch (error) {
     console.error("Error fetching DMI weather data:", error);
