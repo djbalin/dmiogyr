@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { DMI_WEATHER_METRICS, DMIAPIResponse } from "./types";
+import { DMI_WEATHER_METRICS, type DMIAPIResponse } from "./types";
 
 export async function GET() {
   const apiKey = process.env.DMI_API_KEY;

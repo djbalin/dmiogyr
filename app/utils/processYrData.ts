@@ -1,5 +1,5 @@
-import { type YrAPIResponse, type YrTimeseries } from "@/app/api/yr/types";
-import { type HourlyForecast } from "./processData";
+import type { YrAPIResponse, YrTimeseries } from "@/app/api/yr/types";
+import type { HourlyForecast } from "./processData";
 
 /**
  * Process Yr (MET Norway) API response into standardized HourlyForecast format

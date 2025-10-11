@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { YrAPIResponse } from "./types";
+import type { YrAPIResponse } from "./types";
 
 // Cache storage for Yr data (in production, use Redis or similar)
 let cachedData: YrAPIResponse | null = null;

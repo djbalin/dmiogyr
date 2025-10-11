@@ -1,4 +1,4 @@
-import { type DMIAPIResponse } from "@/app/api/dmi/types";
+import type { DMIAPIResponse } from "@/app/api/dmi/types";
 
 export interface HourlyForecast {
   timestamp: string;

@@ -1,14 +1,15 @@
+/** biome-ignore-all lint/style/noNonNullAssertion: <explanation> */
 "use client";
 
 import { useEffect, useState } from "react";
 import {
-  HourlyForecast,
+  type HourlyForecast,
   processHourlyForecasts,
   getWeatherEmoji,
 } from "./utils/processData";
 import { processYrForecasts } from "./utils/processYrData";
-import { type DMIAPIResponse } from "@/app/api/dmi/types";
-import { type YrAPIResponse } from "@/app/api/yr/types";
+import type { DMIAPIResponse } from "@/app/api/dmi/types";
+import type { YrAPIResponse } from "@/app/api/yr/types";
 import { getSunTimes, isNightTime, formatTime } from "./utils/sunTimes";
 
 async function fetchDMI() {
@@ -59,10 +60,6 @@ export default function Home() {
     error: null,
   });
   const [sunTimesData, setSunTimesData] = useState<SunTimesMap>(new Map());
-  const [dmiExpandedDays, setDmiExpandedDays] = useState<Set<string>>(
-    new Set(),
-  );
-  const [yrExpandedDays, setYrExpandedDays] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     async function initWeather() {
@@ -341,93 +338,41 @@ function UnifiedWeatherDayCard({
   onToggle,
   sunTimes,
 }: UnifiedWeatherDayCardProps) {
-  // Get 2PM data or midday data for both providers
-  const dmi2PM =
-    dmiHours.find((h) => h.hour === "14:00") ||
-    dmiHours[Math.floor(dmiHours.length / 2)];
-  const yr2PM =
-    yrHours.find((h) => h.hour === "14:00") ||
-    yrHours[Math.floor(yrHours.length / 2)];
-
-  // Calculate aggregates for the day
-  const dmiTemps = dmiHours.map((h) => h.temperature);
-  const yrTemps = yrHours.map((h) => h.temperature);
-
-  const dmiMaxTemp = dmiTemps.length > 0 ? Math.max(...dmiTemps) : null;
-  const dmiMinTemp = dmiTemps.length > 0 ? Math.min(...dmiTemps) : null;
-  const yrMaxTemp = yrTemps.length > 0 ? Math.max(...yrTemps) : null;
-  const yrMinTemp = yrTemps.length > 0 ? Math.min(...yrTemps) : null;
-
-  const dmiTotalPrecip = dmiHours.reduce((sum, h) => sum + h.precipitation, 0);
-  const yrTotalPrecip = yrHours.reduce((sum, h) => sum + h.precipitation, 0);
-
-  // Calculate weather for different time periods separately for DMI and Yr
-  const dayDate = new Date(date);
-
-  const getWeatherForPeriod = (
-    hours: HourlyForecast[],
-    startHour: number,
-    endHour: number,
-  ) => {
-    const periodHours = hours.filter((h) => {
-      const hour = parseInt(h.hour.split(":")[0]);
-      return hour >= startHour && hour < endHour;
-    });
-
-    if (periodHours.length === 0) return null;
-
-    const avgCloudCover =
-      periodHours.reduce((sum, h) => sum + h.cloudCover, 0) /
-      periodHours.length;
-    const avgPrecip =
-      periodHours.reduce((sum, h) => sum + h.precipitation, 0) /
-      periodHours.length;
-
-    // Check if the middle of this period is nighttime
-    const midHour = Math.floor((startHour + endHour) / 2);
-    const testDate = new Date(dayDate);
-    testDate.setHours(midHour, 0, 0, 0);
-    const isNight = isNightTime(testDate, sunTimes);
-
-    return getWeatherEmoji(avgCloudCover, avgPrecip, isNight);
-  };
-
-  // DMI weather periods
-  const dmiNightWeather = getWeatherForPeriod(dmiHours, 0, 6); // 00-06
-  const dmiMorningWeather = getWeatherForPeriod(dmiHours, 6, 12); // 06-12
-  const dmiAfternoonWeather = getWeatherForPeriod(dmiHours, 12, 18); // 12-18
-  const dmiEveningWeather = getWeatherForPeriod(dmiHours, 18, 24); // 18-24
-
-  // Yr weather periods
-  const yrNightWeather = getWeatherForPeriod(yrHours, 0, 6); // 00-06
-  const yrMorningWeather = getWeatherForPeriod(yrHours, 6, 12); // 06-12
-  const yrAfternoonWeather = getWeatherForPeriod(yrHours, 12, 18); // 12-18
-  const yrEveningWeather = getWeatherForPeriod(yrHours, 18, 24); // 18-24
-
-  // Calculate max wind speed for the day
-  const dmiMaxWind =
-    dmiHours.length > 0 ? Math.max(...dmiHours.map((h) => h.windSpeed)) : null;
-  const yrMaxWind =
-    yrHours.length > 0 ? Math.max(...yrHours.map((h) => h.windSpeed)) : null;
-
+  // Get day name for mobile headers
   const dataDay = (dmiHours[0] || yrHours[0]).dayName.split(",")[0];
-
   const dataDayname = (dataDay || "") as keyof typeof EN_DAYS_TO_DA;
-
-  // Use first available data for day name
   const dayName = (EN_DAYS_TO_DA[dataDayname] || dataDayname).substring(0, 3);
 
   return (
     <div className="bg-white rounded-xl shadow-md overflow-hidden">
-      <div
+      <button
         onClick={onToggle}
-        className="cursor-pointer hover:bg-gray-50 transition-colors"
+        type="button"
+        className="cursor-pointer hover:bg-gray-50 transition-colors w-full text-left"
       >
         <DesktopHeaders />
-        <MobileHeaders />
-        <DataRowDesktop />
-        <DataRowMobile />
-      </div>
+        <MobileHeaders
+          dayIndex={dayIndex}
+          dayName={dayName}
+          date={date}
+          sunTimes={sunTimes}
+        />
+        <DataRowDesktop
+          dayIndex={dayIndex}
+          date={date}
+          sunTimes={sunTimes}
+          dmiHours={dmiHours}
+          yrHours={yrHours}
+          isExpanded={isExpanded}
+          onToggle={onToggle}
+        />
+        <DataRowMobile
+          dmiHours={dmiHours}
+          yrHours={yrHours}
+          date={date}
+          sunTimes={sunTimes}
+        />
+      </button>
 
       {/* Expanded view */}
       {isExpanded && (
@@ -440,274 +385,407 @@ function UnifiedWeatherDayCard({
       )}
     </div>
   );
+}
 
-  function DataRowMobile() {
-    return (
-      <div className="lg:hidden grid grid-cols-[1fr_auto_auto_auto_auto] gap-2 px-3 py-3 items-center">
-        <div className="flex flex-col gap-1">
-          {/* Temperature */}
-          <div className="flex flex-col text-sm">
-            {dmiMaxTemp !== null && dmiMinTemp !== null && (
-              <div className="text-teal-700 font-semibold">
-                {Math.round(dmiMaxTemp)}° / {Math.round(dmiMinTemp)}°
-              </div>
-            )}
-            {yrMaxTemp !== null && yrMinTemp !== null && (
-              <div className="text-indigo-700 font-semibold">
-                {Math.round(yrMaxTemp)}° / {Math.round(yrMinTemp)}°
-              </div>
-            )}
-          </div>
+function DataRowMobile({
+  dmiHours,
+  yrHours,
+  date,
+  sunTimes,
+}: {
+  dmiHours: HourlyForecast[];
+  yrHours: HourlyForecast[];
+  date: string;
+  sunTimes: { sunrise: Date; sunset: Date };
+}) {
+  // Calculate aggregates
+  const dmiTemps = dmiHours.map((h) => h.temperature);
+  const yrTemps = yrHours.map((h) => h.temperature);
+  const dmiMaxTemp = dmiTemps.length > 0 ? Math.max(...dmiTemps) : null;
+  const dmiMinTemp = dmiTemps.length > 0 ? Math.min(...dmiTemps) : null;
+  const yrMaxTemp = yrTemps.length > 0 ? Math.max(...yrTemps) : null;
+  const yrMinTemp = yrTemps.length > 0 ? Math.min(...yrTemps) : null;
+  const dmiMaxWind =
+    dmiHours.length > 0 ? Math.max(...dmiHours.map((h) => h.windSpeed)) : null;
+  const yrMaxWind =
+    yrHours.length > 0 ? Math.max(...yrHours.map((h) => h.windSpeed)) : null;
 
-          {/* Wind */}
-          <div className="flex flex-col text-xs text-gray-600">
-            {dmiMaxWind !== null && (
-              <div className="text-teal-700">{Math.round(dmiMaxWind)} m/s</div>
-            )}
-            {yrMaxWind !== null && (
-              <div className="text-indigo-700">{Math.round(yrMaxWind)} m/s</div>
-            )}
-          </div>
-        </div>
+  // Calculate weather for different time periods
+  const dayDate = new Date(date);
+  const getWeatherForPeriod = (
+    hours: HourlyForecast[],
+    startHour: number,
+    endHour: number,
+  ) => {
+    const periodHours = hours.filter((h) => {
+      const hour = parseInt(h.hour.split(":")[0]);
+      return hour >= startHour && hour < endHour;
+    });
+    if (periodHours.length === 0) return null;
+    const avgCloudCover =
+      periodHours.reduce((sum, h) => sum + h.cloudCover, 0) /
+      periodHours.length;
+    const avgPrecip =
+      periodHours.reduce((sum, h) => sum + h.precipitation, 0) /
+      periodHours.length;
+    const midHour = Math.floor((startHour + endHour) / 2);
+    const testDate = new Date(dayDate);
+    testDate.setHours(midHour, 0, 0, 0);
+    const isNight = isNightTime(testDate, sunTimes);
+    return getWeatherEmoji(avgCloudCover, avgPrecip, isNight);
+  };
 
-        {/* Night */}
-        <div className="flex flex-col items-center gap-0.5 w-14">
-          {dmiNightWeather && <div className="text-xl">{dmiNightWeather}</div>}
-          {yrNightWeather && <div className="text-xl">{yrNightWeather}</div>}
-          {!dmiNightWeather && !yrNightWeather && (
-            <div className="text-xl">—</div>
-          )}
-        </div>
-        {/* Morning */}
-        <div className="flex flex-col items-center gap-0.5 w-14">
-          {dmiMorningWeather && (
-            <div className="text-xl">{dmiMorningWeather}</div>
-          )}
-          {yrMorningWeather && (
-            <div className="text-xl">{yrMorningWeather}</div>
-          )}
-          {!dmiMorningWeather && !yrMorningWeather && (
-            <div className="text-xl">—</div>
-          )}
-        </div>
-        {/* Afternoon */}
-        <div className="flex flex-col items-center gap-0.5 w-14">
-          {dmiAfternoonWeather && (
-            <div className="text-xl">{dmiAfternoonWeather}</div>
-          )}
-          {yrAfternoonWeather && (
-            <div className="text-xl">{yrAfternoonWeather}</div>
-          )}
-          {!dmiAfternoonWeather && !yrAfternoonWeather && (
-            <div className="text-xl">—</div>
-          )}
-        </div>
-        {/* Evening */}
-        <div className="flex flex-col items-center gap-0.5 w-14">
-          {dmiEveningWeather && (
-            <div className="text-xl">{dmiEveningWeather}</div>
-          )}
-          {yrEveningWeather && (
-            <div className="text-xl">{yrEveningWeather}</div>
-          )}
-          {!dmiEveningWeather && !yrEveningWeather && (
-            <div className="text-xl">—</div>
-          )}
-        </div>
-      </div>
-    );
-  }
+  const dmiNightWeather = getWeatherForPeriod(dmiHours, 0, 6);
+  const dmiMorningWeather = getWeatherForPeriod(dmiHours, 6, 12);
+  const dmiAfternoonWeather = getWeatherForPeriod(dmiHours, 12, 18);
+  const dmiEveningWeather = getWeatherForPeriod(dmiHours, 18, 24);
+  const yrNightWeather = getWeatherForPeriod(yrHours, 0, 6);
+  const yrMorningWeather = getWeatherForPeriod(yrHours, 6, 12);
+  const yrAfternoonWeather = getWeatherForPeriod(yrHours, 12, 18);
+  const yrEveningWeather = getWeatherForPeriod(yrHours, 18, 24);
 
-  function DataRowDesktop() {
-    return (
-      <div className="hidden lg:grid grid-cols-[160px_280px_140px_120px_120px_120px_auto] gap-4 px-4 py-4 items-center">
-        {/* Day name */}
-        <div>
-          <h2 className="text-xl font-bold text-gray-800">
-            {dayIndex === 0 ? "I dag" : dayName.substring(0, 3)}
-          </h2>
-          <p className="text-base text-gray-500">
-            {new Date(date).toLocaleDateString("da-DK", {
-              day: "numeric",
-              month: "short",
-            })}
-          </p>
-          <p className="text-sm text-gray-400 mt-1">
-            ☀️ {formatTime(sunTimes.sunrise)} 🌙 {formatTime(sunTimes.sunset)}
-          </p>
-        </div>
-
-        {/* Weather icons for different times of day */}
-        <div className="grid grid-cols-4 gap-1 text-center">
-          {/* Night */}
-          <div className="flex flex-col items-center gap-0.5">
-            {dmiNightWeather && (
-              <div className="text-3xl">{dmiNightWeather}</div>
-            )}
-            {yrNightWeather && <div className="text-3xl">{yrNightWeather}</div>}
-            {!dmiNightWeather && !yrNightWeather && (
-              <div className="text-3xl">—</div>
-            )}
-          </div>
-          {/* Morning */}
-          <div className="flex flex-col items-center gap-0.5">
-            {dmiMorningWeather && (
-              <div className="text-3xl">{dmiMorningWeather}</div>
-            )}
-            {yrMorningWeather && (
-              <div className="text-3xl">{yrMorningWeather}</div>
-            )}
-            {!dmiMorningWeather && !yrMorningWeather && (
-              <div className="text-3xl">—</div>
-            )}
-          </div>
-          {/* Afternoon */}
-          <div className="flex flex-col items-center gap-0.5">
-            {dmiAfternoonWeather && (
-              <div className="text-3xl">{dmiAfternoonWeather}</div>
-            )}
-            {yrAfternoonWeather && (
-              <div className="text-3xl">{yrAfternoonWeather}</div>
-            )}
-            {!dmiAfternoonWeather && !yrAfternoonWeather && (
-              <div className="text-3xl">—</div>
-            )}
-          </div>
-          {/* Evening */}
-          <div className="flex flex-col items-center gap-0.5">
-            {dmiEveningWeather && (
-              <div className="text-3xl">{dmiEveningWeather}</div>
-            )}
-            {yrEveningWeather && (
-              <div className="text-3xl">{yrEveningWeather}</div>
-            )}
-            {!dmiEveningWeather && !yrEveningWeather && (
-              <div className="text-3xl">—</div>
-            )}
-          </div>
-        </div>
-
+  return (
+    <div className="lg:hidden grid grid-cols-[1fr_auto_auto_auto_auto] gap-2 px-3 py-3 items-center">
+      <div className="flex flex-col gap-1">
         {/* Temperature */}
-        <div className="flex flex-col gap-0.5 text-center">
+        <div className="flex flex-col text-sm">
           {dmiMaxTemp !== null && dmiMinTemp !== null && (
-            <div className="flex items-center justify-center gap-1">
-              <span className="text-xl font-bold text-teal-700">
-                {Math.round(dmiMaxTemp)}°
-              </span>
-              <span className="text-base text-teal-600">
-                /{Math.round(dmiMinTemp)}°
-              </span>
+            <div className="text-teal-700 font-semibold">
+              {Math.round(dmiMaxTemp)}° / {Math.round(dmiMinTemp)}°
             </div>
           )}
           {yrMaxTemp !== null && yrMinTemp !== null && (
-            <div className="flex items-center justify-center gap-1">
-              <span className="text-xl font-bold text-indigo-700">
-                {Math.round(yrMaxTemp)}°
-              </span>
-              <span className="text-base text-indigo-600">
-                /{Math.round(yrMinTemp)}°
-              </span>
+            <div className="text-indigo-700 font-semibold">
+              {Math.round(yrMaxTemp)}° / {Math.round(yrMinTemp)}°
             </div>
-          )}
-        </div>
-
-        {/* Precipitation */}
-        <div className="text-center">
-          {dmiHours.length > 0 && (
-            <p className="text-base font-semibold text-teal-700">
-              {dmiTotalPrecip.toFixed(1)} mm
-            </p>
-          )}
-          {yrHours.length > 0 && (
-            <p className="text-base font-semibold text-indigo-700">
-              {yrTotalPrecip.toFixed(1)} mm
-            </p>
           )}
         </div>
 
         {/* Wind */}
-        <div className="text-center">
-          {dmi2PM && (
-            <p className="text-base font-semibold text-teal-700">
-              {Math.round(dmi2PM.windSpeed)} m/s
-            </p>
+        <div className="flex flex-col text-xs text-gray-600">
+          {dmiMaxWind !== null && (
+            <div className="text-teal-700">{Math.round(dmiMaxWind)} m/s</div>
           )}
-          {yr2PM && (
-            <p className="text-base font-semibold text-indigo-700">
-              {Math.round(yr2PM.windSpeed)} m/s
-            </p>
+          {yrMaxWind !== null && (
+            <div className="text-indigo-700">{Math.round(yrMaxWind)} m/s</div>
           )}
-        </div>
-
-        {/* Humidity */}
-        <div className="text-center">
-          {dmi2PM && (
-            <p className="text-base font-semibold text-teal-700">
-              {Math.round(dmi2PM.humidity)}%
-            </p>
-          )}
-          {yr2PM && (
-            <p className="text-base font-semibold text-indigo-700">
-              {Math.round(yr2PM.humidity)}%
-            </p>
-          )}
-        </div>
-
-        {/* Expand button */}
-        <div className="flex justify-end">
-          <ExpandButton
-            isExpanded={isExpanded}
-            onToggle={(e) => {
-              e.stopPropagation();
-              onToggle();
-            }}
-          />
         </div>
       </div>
-    );
-  }
 
-  function MobileHeaders() {
-    return (
-      <div className="lg:hidden border-b border-gray-200 bg-gray-50">
-        <div className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-2 px-3 py-2 text-xs font-semibold text-gray-600">
-          <div className="text-left font-semibold w-24">
-            {dayIndex === 0 ? "I dag" : dayName.split(",")[0]}{" "}
-            {new Date(date).toLocaleDateString("da-DK", {
-              day: "numeric",
-              month: "short",
-            })}
-            <div className="text-[10px] text-gray-400 font-normal mt-0.5">
-              ☀️ {formatTime(sunTimes.sunrise)} 🌙 {formatTime(sunTimes.sunset)}
-            </div>
+      {/* Night */}
+      <div className="flex flex-col items-center gap-0.5 w-14">
+        {dmiNightWeather && <div className="text-xl">{dmiNightWeather}</div>}
+        {yrNightWeather && <div className="text-xl">{yrNightWeather}</div>}
+        {!dmiNightWeather && !yrNightWeather && (
+          <div className="text-xl">—</div>
+        )}
+      </div>
+      {/* Morning */}
+      <div className="flex flex-col items-center gap-0.5 w-14">
+        {dmiMorningWeather && (
+          <div className="text-xl">{dmiMorningWeather}</div>
+        )}
+        {yrMorningWeather && <div className="text-xl">{yrMorningWeather}</div>}
+        {!dmiMorningWeather && !yrMorningWeather && (
+          <div className="text-xl">—</div>
+        )}
+      </div>
+      {/* Afternoon */}
+      <div className="flex flex-col items-center gap-0.5 w-14">
+        {dmiAfternoonWeather && (
+          <div className="text-xl">{dmiAfternoonWeather}</div>
+        )}
+        {yrAfternoonWeather && (
+          <div className="text-xl">{yrAfternoonWeather}</div>
+        )}
+        {!dmiAfternoonWeather && !yrAfternoonWeather && (
+          <div className="text-xl">—</div>
+        )}
+      </div>
+      {/* Evening */}
+      <div className="flex flex-col items-center gap-0.5 w-14">
+        {dmiEveningWeather && (
+          <div className="text-xl">{dmiEveningWeather}</div>
+        )}
+        {yrEveningWeather && <div className="text-xl">{yrEveningWeather}</div>}
+        {!dmiEveningWeather && !yrEveningWeather && (
+          <div className="text-xl">—</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function DataRowDesktop({
+  dayIndex,
+  date,
+  sunTimes,
+  dmiHours,
+  yrHours,
+  isExpanded,
+  onToggle,
+}: {
+  dayIndex: number;
+  date: string;
+  sunTimes: { sunrise: Date; sunset: Date };
+  dmiHours: HourlyForecast[];
+  yrHours: HourlyForecast[];
+  isExpanded: boolean;
+  onToggle: () => void;
+}) {
+  // Get day name
+  const dataDay = (dmiHours[0] || yrHours[0]).dayName.split(",")[0];
+  const dataDayname = (dataDay || "") as keyof typeof EN_DAYS_TO_DA;
+  const dayName = (EN_DAYS_TO_DA[dataDayname] || dataDayname).substring(0, 3);
+
+  // Get 2PM data or midday data
+  const dmi2PM =
+    dmiHours.find((h) => h.hour === "14:00") ||
+    dmiHours[Math.floor(dmiHours.length / 2)];
+  const yr2PM =
+    yrHours.find((h) => h.hour === "14:00") ||
+    yrHours[Math.floor(yrHours.length / 2)];
+
+  // Calculate aggregates
+  const dmiTemps = dmiHours.map((h) => h.temperature);
+  const yrTemps = yrHours.map((h) => h.temperature);
+  const dmiMaxTemp = dmiTemps.length > 0 ? Math.max(...dmiTemps) : null;
+  const dmiMinTemp = dmiTemps.length > 0 ? Math.min(...dmiTemps) : null;
+  const yrMaxTemp = yrTemps.length > 0 ? Math.max(...yrTemps) : null;
+  const yrMinTemp = yrTemps.length > 0 ? Math.min(...yrTemps) : null;
+  const dmiTotalPrecip = dmiHours.reduce((sum, h) => sum + h.precipitation, 0);
+  const yrTotalPrecip = yrHours.reduce((sum, h) => sum + h.precipitation, 0);
+
+  // Calculate weather for different time periods
+  const dayDate = new Date(date);
+  const getWeatherForPeriod = (
+    hours: HourlyForecast[],
+    startHour: number,
+    endHour: number,
+  ) => {
+    const periodHours = hours.filter((h) => {
+      const hour = parseInt(h.hour.split(":")[0]);
+      return hour >= startHour && hour < endHour;
+    });
+    if (periodHours.length === 0) return null;
+    const avgCloudCover =
+      periodHours.reduce((sum, h) => sum + h.cloudCover, 0) /
+      periodHours.length;
+    const avgPrecip =
+      periodHours.reduce((sum, h) => sum + h.precipitation, 0) /
+      periodHours.length;
+    const midHour = Math.floor((startHour + endHour) / 2);
+    const testDate = new Date(dayDate);
+    testDate.setHours(midHour, 0, 0, 0);
+    const isNight = isNightTime(testDate, sunTimes);
+    return getWeatherEmoji(avgCloudCover, avgPrecip, isNight);
+  };
+
+  const dmiNightWeather = getWeatherForPeriod(dmiHours, 0, 6);
+  const dmiMorningWeather = getWeatherForPeriod(dmiHours, 6, 12);
+  const dmiAfternoonWeather = getWeatherForPeriod(dmiHours, 12, 18);
+  const dmiEveningWeather = getWeatherForPeriod(dmiHours, 18, 24);
+  const yrNightWeather = getWeatherForPeriod(yrHours, 0, 6);
+  const yrMorningWeather = getWeatherForPeriod(yrHours, 6, 12);
+  const yrAfternoonWeather = getWeatherForPeriod(yrHours, 12, 18);
+  const yrEveningWeather = getWeatherForPeriod(yrHours, 18, 24);
+
+  return (
+    <div className="hidden lg:grid grid-cols-[160px_280px_140px_120px_120px_120px_auto] gap-4 px-4 py-4 items-center">
+      {/* Day name */}
+      <div>
+        <h2 className="text-xl font-bold text-gray-800">
+          {dayIndex === 0 ? "I dag" : dayName.substring(0, 3)}
+        </h2>
+        <p className="text-base text-gray-500">
+          {new Date(date).toLocaleDateString("da-DK", {
+            day: "numeric",
+            month: "short",
+          })}
+        </p>
+        <p className="text-sm text-gray-400 mt-1">
+          ☀️ {formatTime(sunTimes.sunrise)} 🌙 {formatTime(sunTimes.sunset)}
+        </p>
+      </div>
+
+      {/* Weather icons for different times of day */}
+      <div className="grid grid-cols-4 gap-1 text-center">
+        {/* Night */}
+        <div className="flex flex-col items-center gap-0.5">
+          {dmiNightWeather && <div className="text-3xl">{dmiNightWeather}</div>}
+          {yrNightWeather && <div className="text-3xl">{yrNightWeather}</div>}
+          {!dmiNightWeather && !yrNightWeather && (
+            <div className="text-3xl">—</div>
+          )}
+        </div>
+        {/* Morning */}
+        <div className="flex flex-col items-center gap-0.5">
+          {dmiMorningWeather && (
+            <div className="text-3xl">{dmiMorningWeather}</div>
+          )}
+          {yrMorningWeather && (
+            <div className="text-3xl">{yrMorningWeather}</div>
+          )}
+          {!dmiMorningWeather && !yrMorningWeather && (
+            <div className="text-3xl">—</div>
+          )}
+        </div>
+        {/* Afternoon */}
+        <div className="flex flex-col items-center gap-0.5">
+          {dmiAfternoonWeather && (
+            <div className="text-3xl">{dmiAfternoonWeather}</div>
+          )}
+          {yrAfternoonWeather && (
+            <div className="text-3xl">{yrAfternoonWeather}</div>
+          )}
+          {!dmiAfternoonWeather && !yrAfternoonWeather && (
+            <div className="text-3xl">—</div>
+          )}
+        </div>
+        {/* Evening */}
+        <div className="flex flex-col items-center gap-0.5">
+          {dmiEveningWeather && (
+            <div className="text-3xl">{dmiEveningWeather}</div>
+          )}
+          {yrEveningWeather && (
+            <div className="text-3xl">{yrEveningWeather}</div>
+          )}
+          {!dmiEveningWeather && !yrEveningWeather && (
+            <div className="text-3xl">—</div>
+          )}
+        </div>
+      </div>
+
+      {/* Temperature */}
+      <div className="flex flex-col gap-0.5 text-center">
+        {dmiMaxTemp !== null && dmiMinTemp !== null && (
+          <div className="flex items-center justify-center gap-1">
+            <span className="text-xl font-bold text-teal-700">
+              {Math.round(dmiMaxTemp)}°
+            </span>
+            <span className="text-base text-teal-600">
+              /{Math.round(dmiMinTemp)}°
+            </span>
           </div>
-          <div className="text-center w-14">Nat</div>
-          <div className="text-center w-14">Dag</div>
-          <div className="text-center w-14">Efterm.</div>
-          <div className="text-center w-14">Aften</div>
-        </div>
+        )}
+        {yrMaxTemp !== null && yrMinTemp !== null && (
+          <div className="flex items-center justify-center gap-1">
+            <span className="text-xl font-bold text-indigo-700">
+              {Math.round(yrMaxTemp)}°
+            </span>
+            <span className="text-base text-indigo-600">
+              /{Math.round(yrMinTemp)}°
+            </span>
+          </div>
+        )}
       </div>
-    );
-  }
 
-  function DesktopHeaders() {
-    return (
-      <div className="hidden lg:grid grid-cols-[160px_280px_140px_120px_120px_120px_auto] gap-4 px-4 py-3 border-b border-gray-200 bg-gray-50 text-sm font-semibold text-gray-600">
-        <div>Dag</div>
-        <div className="grid grid-cols-4 gap-1 text-center">
-          <div>Nat</div>
-          <div>Morgen</div>
-          <div>Eftermiddag</div>
-          <div>Aften</div>
-        </div>
-        <div className="text-center">Temp.</div>
-        <div className="text-center">Nedbør</div>
-        <div className="text-center">Vind</div>
-        <div className="text-center">Luftfugtighed</div>
-        <div></div>
+      {/* Precipitation */}
+      <div className="text-center">
+        {dmiHours.length > 0 && (
+          <p className="text-base font-semibold text-teal-700">
+            {dmiTotalPrecip.toFixed(1)} mm
+          </p>
+        )}
+        {yrHours.length > 0 && (
+          <p className="text-base font-semibold text-indigo-700">
+            {yrTotalPrecip.toFixed(1)} mm
+          </p>
+        )}
       </div>
-    );
-  }
+
+      {/* Wind */}
+      <div className="text-center">
+        {dmi2PM && (
+          <p className="text-base font-semibold text-teal-700">
+            {Math.round(dmi2PM.windSpeed)} m/s
+          </p>
+        )}
+        {yr2PM && (
+          <p className="text-base font-semibold text-indigo-700">
+            {Math.round(yr2PM.windSpeed)} m/s
+          </p>
+        )}
+      </div>
+
+      {/* Humidity */}
+      <div className="text-center">
+        {dmi2PM && (
+          <p className="text-base font-semibold text-teal-700">
+            {Math.round(dmi2PM.humidity)}%
+          </p>
+        )}
+        {yr2PM && (
+          <p className="text-base font-semibold text-indigo-700">
+            {Math.round(yr2PM.humidity)}%
+          </p>
+        )}
+      </div>
+
+      {/* Expand button */}
+      <div className="flex justify-end">
+        <ExpandButton
+          isExpanded={isExpanded}
+          onToggle={(e) => {
+            e.stopPropagation();
+            onToggle();
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function MobileHeaders({
+  dayIndex,
+  dayName,
+  date,
+  sunTimes,
+}: {
+  dayIndex: number;
+  dayName: string;
+  date: string;
+  sunTimes: { sunrise: Date; sunset: Date };
+}) {
+  return (
+    <div className="lg:hidden border-b border-gray-200 bg-gray-50">
+      <div className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-2 px-3 py-2 text-xs font-semibold text-gray-600">
+        <div className="text-left font-semibold w-24">
+          {dayIndex === 0 ? "I dag" : dayName.split(",")[0]}{" "}
+          {new Date(date).toLocaleDateString("da-DK", {
+            day: "numeric",
+            month: "short",
+          })}
+          <div className="text-[10px] text-gray-400 font-normal mt-0.5">
+            ☀️ {formatTime(sunTimes.sunrise)} 🌙 {formatTime(sunTimes.sunset)}
+          </div>
+        </div>
+        <div className="text-center w-14">Nat</div>
+        <div className="text-center w-14">Dag</div>
+        <div className="text-center w-14">Efterm.</div>
+        <div className="text-center w-14">Aften</div>
+      </div>
+    </div>
+  );
+}
+
+function DesktopHeaders() {
+  return (
+    <div className="hidden lg:grid grid-cols-[160px_280px_140px_120px_120px_120px_auto] gap-4 px-4 py-3 border-b border-gray-200 bg-gray-50 text-sm font-semibold text-gray-600">
+      <div>Dag</div>
+      <div className="grid grid-cols-4 gap-1 text-center">
+        <div>Nat</div>
+        <div>Morgen</div>
+        <div>Eftermiddag</div>
+        <div>Aften</div>
+      </div>
+      <div className="text-center">Temp.</div>
+      <div className="text-center">Nedbør</div>
+      <div className="text-center">Vind</div>
+      <div className="text-center">Luftfugtighed</div>
+      <div></div>
+    </div>
+  );
 }
 
 function ExpandedView({
@@ -978,6 +1056,7 @@ function ExpandButton({
     <button
       className="text-blue-600 hover:text-blue-700 font-medium text-sm uppercase tracking-wide flex items-center gap-2 cursor-pointer"
       onClick={onToggle}
+      type="button"
     >
       {isExpanded ? "LUK" : "UDVID"}
       <svg
@@ -987,6 +1066,8 @@ function ExpandButton({
         fill="none"
         stroke="currentColor"
         viewBox="0 0 24 24"
+        role="img"
+        aria-label={isExpanded ? "Luk" : "Udvid"}
       >
         <path
           strokeLinecap="round"
