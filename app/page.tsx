@@ -1,4 +1,4 @@
-/** biome-ignore-all lint/style/noNonNullAssertion: <explanation> */
+/** biome-ignore-all lint/style/noNonNullAssertion: fok this */
 "use client";
 
 import { useEffect, useState } from "react";
@@ -345,9 +345,15 @@ function UnifiedWeatherDayCard({
 
   return (
     <div className="bg-white rounded-xl shadow-md overflow-hidden">
-      <button
+      {/** biome-ignore lint/a11y/noStaticElementInteractions: aaa */}
+      <div
         onClick={onToggle}
-        type="button"
+        onKeyUp={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onToggle();
+          }
+        }}
         className="cursor-pointer hover:bg-gray-50 transition-colors w-full text-left"
       >
         <DesktopHeaders />
@@ -372,7 +378,7 @@ function UnifiedWeatherDayCard({
           date={date}
           sunTimes={sunTimes}
         />
-      </button>
+      </div>
 
       {/* Expanded view */}
       {isExpanded && (
