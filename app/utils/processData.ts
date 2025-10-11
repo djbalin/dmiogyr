@@ -10,9 +10,9 @@ export interface HourlyForecast {
   windDirection: number;
   cloudCover: number;
   humidity: number;
-  pressure: number;
-  gustSpeed: number;
-  visibility: number;
+  // pressure: number;
+  // gustSpeed: number;
+  // visibility: number;
 }
 
 export function processHourlyForecasts(data: DMIAPIResponse): HourlyForecast[] {
@@ -41,9 +41,9 @@ export function processHourlyForecasts(data: DMIAPIResponse): HourlyForecast[] {
       windDirection: feature.properties["wind-dir-10m"],
       cloudCover: feature.properties["fraction-of-cloud-cover"] * 100, // convert from fraction to percentage
       humidity: feature.properties["relative-humidity-2m"],
-      pressure: feature.properties["pressure-sealevel"],
-      gustSpeed: feature.properties["gust-wind-speed-10m"],
-      visibility: feature.properties.visibility,
+      // pressure: feature.properties["pressure-sealevel"],
+      // gustSpeed: feature.properties["gust-wind-speed-10m"],
+      // visibility: feature.properties.visibility,
     };
   });
 }

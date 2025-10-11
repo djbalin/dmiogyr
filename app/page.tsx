@@ -141,7 +141,7 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-400 via-blue-500 to-blue-600 p-4 sm:p-8">
+    <div className="min-h-screen bg-gradient-to-b from-cyan-600 via-blue-500 to-blue-600 p-4 sm:p-8">
       <div className="max-w-7xl mx-auto text-base">
         <PageHeader />
 

@@ -5,9 +5,10 @@ export const DMI_WEATHER_METRICS = [
   "wind-dir-10m",
   "fraction-of-cloud-cover",
   "relative-humidity-2m",
-  "pressure-sealevel",
-  "gust-wind-speed-10m",
-  "visibility",
+  // Some unused data for now
+  // "pressure-sealevel",
+  // "gust-wind-speed-10m",
+  // "visibility",
 ] as const;
 
 type DMIPropertySlug = (typeof DMI_WEATHER_METRICS)[number];
