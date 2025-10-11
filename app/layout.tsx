@@ -13,8 +13,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Copenhagen Weather Forecast",
-  description: "Hourly weather forecast for Copenhagen using DMI data",
+  title: "DMI og Yr vejrudsigt",
+  description:
+    "Compare hourly weather forecasts for Copenhagen from DMI and Yr (MET Norway)",
 };
 
 export default function RootLayout({

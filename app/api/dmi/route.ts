@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
-import { DMI_WEATHER_METRICS, type DMIAPIResponse } from "../dmi/types";
+import { DMI_WEATHER_METRICS, DMIAPIResponse } from "./types";
 
-// For now, we're using DMI as the default provider
-// This route maintains backward compatibility with the frontend
 export async function GET() {
   const apiKey = process.env.DMI_API_KEY;
 
@@ -45,9 +43,9 @@ export async function GET() {
     const data = (await response.json()) as DMIAPIResponse;
     return NextResponse.json(data);
   } catch (error) {
-    console.error("Error fetching weather data:", error);
+    console.error("Error fetching DMI weather data:", error);
     return NextResponse.json(
-      { error: "Failed to fetch weather data" },
+      { error: "Failed to fetch weather data from DMI" },
       { status: 500 },
     );
   }

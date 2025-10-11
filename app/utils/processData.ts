@@ -1,4 +1,4 @@
-import { APIResponse } from "@/app/api/types";
+import { type DMIAPIResponse } from "@/app/api/dmi/types";
 
 export interface HourlyForecast {
   timestamp: string;
@@ -15,7 +15,7 @@ export interface HourlyForecast {
   visibility: number;
 }
 
-export function processHourlyForecasts(data: APIResponse): HourlyForecast[] {
+export function processHourlyForecasts(data: DMIAPIResponse): HourlyForecast[] {
   if (!data.features || data.features.length === 0) {
     return [];
   }
