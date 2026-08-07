@@ -4,15 +4,6 @@ import { DMI_WEATHER_METRICS, type DMIAPIResponse } from "../dmi/types";
 // For now, we're using DMI as the default provider
 // This route maintains backward compatibility with the frontend
 export async function GET() {
-  const apiKey = process.env.DMI_API_KEY;
-
-  if (!apiKey) {
-    return NextResponse.json(
-      { error: "DMI API key not configured" },
-      { status: 500 },
-    );
-  }
-
   const coords = "POINT(12.561 55.715)"; // Copenhagen coordinates
 
   // Create datetime range: now to 7 days ahead
@@ -22,7 +13,11 @@ export async function GET() {
 
   const datetimeRange = `${now.toISOString()}/${sevenDaysLater.toISOString()}`;
 
-  const url = `https://dmigw.govcloud.dk/v1/forecastedr/collections/harmonie_dini_sf/position?coords=${encodeURIComponent(
+  // DMI moved their Open Data APIs to opendataapi.dmi.dk, which no longer
+  // requires authentication (the old dmigw.govcloud.dk host is deprecated
+  // and still demands an API key).
+  // See https://www.dmi.dk/friedata/dokumentation/forecast-data-edr-api
+  const url = `https://opendataapi.dmi.dk/v1/forecastedr/collections/harmonie_dini_sf/position?coords=${encodeURIComponent(
     coords,
   )}&crs=crs84&parameter-name=${DMI_WEATHER_METRICS.join(
     ",",
@@ -30,9 +25,6 @@ export async function GET() {
 
   try {
     const response = await fetch(url, {
-      headers: {
-        "X-Gravitee-Api-Key": apiKey,
-      },
       next: { revalidate: 3600 }, // Cache for 1 hour
     });
 
