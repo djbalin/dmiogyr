@@ -1,26 +1,152 @@
 @import "tailwindcss";
 
+/*
+ * Semantic colour tokens.
+ *
+ * Every surface, line and piece of text refers to one of these rather than to
+ * a palette value, so the dark theme is a redefinition of the tokens instead
+ * of a `dark:` variant sprinkled over every element. The two provider accents
+ * are tokens for the same reason: DMI is teal and Yr is indigo everywhere,
+ * decided once.
+ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --page: #eef4fb;
+  --page-accent: #dbe9f8;
+  --surface: #ffffff;
+  --surface-muted: #f4f7fb;
+  --surface-raised: #ffffff;
+  --ink: #0f172a;
+  --ink-muted: #5b6b82;
+  --ink-faint: #8695a9;
+  --line: #e3e9f1;
+  --line-strong: #cbd5e1;
+  --accent: #1d4ed8;
+  --dmi: #0f766e;
+  --dmi-soft: #ccfbf1;
+  --yr: #4338ca;
+  --yr-soft: #e0e7ff;
+  --warn: #b45309;
+  --warn-soft: #fef3c7;
+  --danger: #b91c1c;
+  --danger-soft: #fee2e2;
+  --shadow:
+    0 1px 2px rgb(15 23 42 / 0.06), 0 8px 24px -12px rgb(15 23 42 / 0.18);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --page: #070c16;
+    --page-accent: #0d1627;
+    --surface: #111a2b;
+    --surface-muted: #162135;
+    --surface-raised: #17223a;
+    --ink: #e8eefa;
+    --ink-muted: #9fb0c8;
+    --ink-faint: #7387a3;
+    --line: #23304a;
+    --line-strong: #33425f;
+    --accent: #93b4ff;
+    --dmi: #5eead4;
+    --dmi-soft: #0c3b38;
+    --yr: #a5b4fc;
+    --yr-soft: #24245c;
+    --warn: #fcd34d;
+    --warn-soft: #3a2c08;
+    --danger: #fca5a5;
+    --danger-soft: #3d1414;
+    --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 10px 30px -14px rgb(0 0 0 / 0.7);
   }
 }
 
+@theme inline {
+  --color-page: var(--page);
+  --color-page-accent: var(--page-accent);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-surface-raised: var(--surface-raised);
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-ink-faint: var(--ink-faint);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-accent: var(--accent);
+  --color-dmi: var(--dmi);
+  --color-dmi-soft: var(--dmi-soft);
+  --color-yr: var(--yr);
+  --color-yr-soft: var(--yr-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+}
+
+html {
+  color-scheme: light dark;
+}
+
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  /* A flat colour underneath the gradient, so a page taller than the gradient
+     still ends in the theme's background rather than in the browser's white. */
+  background-color: var(--page);
+  background-image: radial-gradient(
+    120% 60rem at 50% -8rem,
+    var(--page-accent) 0%,
+    var(--page) 100%
+  );
+  background-repeat: no-repeat;
+  color: var(--ink);
+  font-family: var(--font-sans);
+  min-height: 100dvh;
+}
+
+/* Tabular figures keep temperature columns from jittering as values change. */
+.numeric {
+  font-variant-numeric: tabular-nums;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* Honour the OS "reduce motion" setting. !important is the point here: it has
+   to beat the animation and transition utilities Tailwind puts on elements. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    /* biome-ignore lint/complexity/noImportantStyles: must override utilities */
+    animation-duration: 0.01ms !important;
+    /* biome-ignore lint/complexity/noImportantStyles: must override utilities */
+    animation-iteration-count: 1 !important;
+    /* biome-ignore lint/complexity/noImportantStyles: must override utilities */
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Weather icon palette. Kept with the other tokens so the icons re-tint with
+   the theme instead of glowing white on a dark page. */
+:root {
+  --icon-sun: #f59e0b;
+  --icon-moon: #cbd5e1;
+  --icon-cloud: #cfd9e6;
+  --icon-cloud-dark: #aebccf;
+  --icon-rain: #3b82f6;
+  --icon-snow: #93c5fd;
+  --icon-bolt: #f59e0b;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --icon-sun: #fbbf24;
+    --icon-moon: #dbeafe;
+    --icon-cloud: #808fa6;
+    --icon-cloud-dark: #63748d;
+    --icon-rain: #60a5fa;
+    --icon-snow: #bfdbfe;
+    --icon-bolt: #fbbf24;
+  }
 }
