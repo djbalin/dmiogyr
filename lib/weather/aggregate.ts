@@ -1,5 +1,6 @@
 import {
   type Condition,
+  conditionFromDmiSymbol,
   conditionFromYrSymbol,
   deriveCondition,
 } from "./conditions";
@@ -51,13 +52,25 @@ export function groupByDay(
   return days;
 }
 
+/**
+ * The condition carried by an entry's own symbol code, trying both
+ * providers' schemes — Yr's are alphabetic ("partlycloudy_day"), DMI's
+ * numeric, so there is no ambiguity in trying both.
+ */
+function symbolCondition(hour: HourlyForecast): Condition | null {
+  if (!hour.symbol) return null;
+  return (
+    conditionFromYrSymbol(hour.symbol) ??
+    conditionFromDmiSymbol(hour.symbol, {
+      precipitation: hour.precipitation,
+      visibility: hour.visibility,
+    })
+  );
+}
+
 /** The condition an entry should be drawn with. */
 export function conditionFor(hour: HourlyForecast): Condition {
-  if (hour.symbol) {
-    const mapped = conditionFromYrSymbol(hour.symbol);
-    if (mapped) return mapped;
-  }
-  return deriveCondition(hour);
+  return symbolCondition(hour) ?? deriveCondition(hour);
 }
 
 /**
@@ -105,15 +118,14 @@ function summarisePeriod(
 
   // Prefer the provider's own symbol for the wettest hour; otherwise describe
   // the period from its averaged sky and its heaviest precipitation.
-  const condition = wettest.symbol
-    ? (conditionFromYrSymbol(wettest.symbol) ??
-      deriveCondition({ ...wettest, cloudCover }))
-    : deriveCondition({
-        cloudCover,
-        precipitation: wettest.precipitation,
-        coversHours: wettest.coversHours,
-        temperature: wettest.temperature,
-      });
+  const condition =
+    symbolCondition(wettest) ??
+    deriveCondition({
+      cloudCover,
+      precipitation: wettest.precipitation,
+      coversHours: wettest.coversHours,
+      temperature: wettest.temperature,
+    });
 
   return { id, condition, isNight: night, temperature, precipitation };
 }

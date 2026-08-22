@@ -88,29 +88,36 @@ function currentHour(now: Date): Date {
   return start;
 }
 
+/** DMI's own numeric symbol codes for a mock entry; see `conditionFromDmiSymbol`. */
+function mockDmiSymbol(sample: Sample): number {
+  if (sample.precipitation >= 2) return 81;
+  if (sample.precipitation >= 0.5) return 63;
+  if (sample.precipitation > 0.05) return 60;
+  if (sample.cloudCover > 75) return 3;
+  if (sample.cloudCover > 15) return 2;
+  return 1;
+}
+
 export function mockDmiResponse(
   lat: number,
   lon: number,
   now = new Date(),
 ): DmiResponse {
-  const samples = generate(lat, lon, currentHour(now), 7 * 24, 0);
+  const start = currentHour(now);
+  const samples = generate(lat, lon, start, 7 * 24, 0);
   return {
-    type: "FeatureCollection",
-    features: samples.map((sample) => ({
-      type: "Feature" as const,
-      geometry: {
-        type: "Point" as const,
-        coordinates: [lon, lat] as [number, number],
-      },
-      properties: {
-        step: sample.time.toISOString(),
-        "temperature-2m": sample.temperature + 273.15,
-        "total-precipitation": sample.precipitation,
-        "wind-speed-10m": sample.windSpeed,
-        "wind-dir-10m": sample.windDirection,
-        "fraction-of-cloud-cover": sample.cloudCover / 100,
-        "relative-humidity-2m": sample.humidity,
-      },
+    id: "0",
+    city: "Mock",
+    timezone: "Europe/Copenhagen",
+    timeserie: samples.map((sample) => ({
+      localTimeIso: sample.time.toISOString(),
+      temp: sample.temperature,
+      symbol: mockDmiSymbol(sample),
+      precip1: sample.precipitation,
+      windDegree: sample.windDirection,
+      windSpeed: sample.windSpeed,
+      humidity: sample.humidity,
+      visibility: 25_000,
     })),
   };
 }

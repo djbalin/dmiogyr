@@ -109,3 +109,113 @@ export function conditionFromYrSymbol(symbol: string): Condition | null {
   if (base.includes("thunder")) return "thunder";
   return YR_SYMBOLS[base] ?? null;
 }
+
+/**
+ * DMI's own numeric weather-symbol codes, as used on dmi.dk and returned by
+ * its `ninjo2dmidk?cmd=llj` endpoint. DMI does not publish a table for these
+ * anywhere in its "Frie data" documentation; this is reconstructed from the
+ * groupings a third-party client of the same endpoint uses
+ * (github.com/Badgie/dmi-weather) and cross-checked against a live sample for
+ * Roskilde, where e.g. 180 lined up with a heavier shower than 160 and 3 was
+ * the default for anything overcast.
+ *
+ * The scheme appears to be: a base code per sky/precipitation type, +100 for
+ * a variant (night, going by 1→101 clear sky), and a further offset for
+ * "byger" (showers) vs steady precipitation. Only the base and +100 forms
+ * have been observed in practice; both are mapped for safety.
+ */
+const DMI_SYMBOL_GROUPS: Record<number, Condition> = {
+  1: "clear",
+  101: "clear",
+  2: "partlycloudy",
+  102: "partlycloudy",
+  3: "cloudy",
+  103: "cloudy",
+  60: "lightrain",
+  80: "lightrain",
+  160: "lightrain",
+  180: "lightrain",
+  63: "rain",
+  81: "rain",
+  163: "rain",
+  181: "rain",
+  68: "sleet",
+  83: "sleet",
+  168: "sleet",
+  183: "sleet",
+  69: "sleet",
+  84: "sleet",
+  169: "sleet",
+  184: "sleet",
+  70: "snow",
+  85: "snow",
+  170: "snow",
+  185: "snow",
+  73: "snow",
+  86: "snow",
+  173: "snow",
+  186: "snow",
+  95: "thunder",
+  195: "thunder",
+};
+
+/** Metres of visibility below which DMI's symbol codes appear not to bother distinguishing fog from cloud. */
+const FOG_VISIBILITY_M = 1000;
+
+/** Millimetres per hour at which the symbol's rain/thunder groups escalate to "heavyrain". */
+const DMI_HEAVY_RAIN_MM = 2;
+
+/**
+ * Map a DMI numeric symbol code (plus the raw values around it) to a
+ * condition. `visibility` overrides to "fog" below {@link FOG_VISIBILITY_M}:
+ * DMI's symbol table has no fog code of its own, so this is the only signal
+ * for it.
+ */
+export function conditionFromDmiSymbol(
+  symbol: string,
+  input: { precipitation: number; visibility?: number },
+): Condition | null {
+  const code = Number.parseInt(symbol, 10);
+  if (Number.isNaN(code)) return null;
+  const group = DMI_SYMBOL_GROUPS[code];
+  if (!group) return null;
+
+  if (
+    typeof input.visibility === "number" &&
+    input.visibility < FOG_VISIBILITY_M &&
+    group !== "thunder"
+  ) {
+    return "fog";
+  }
+
+  // The symbol only distinguishes "rain" from "heavier rain" qualitatively;
+  // sharpen it with the actual amount, same threshold deriveCondition uses.
+  if (
+    (group === "lightrain" || group === "rain") &&
+    input.precipitation >= DMI_HEAVY_RAIN_MM
+  ) {
+    return "heavyrain";
+  }
+
+  return group;
+}
+
+/** A rough cloud-cover percentage for a condition, for display only.
+ *
+ * DMI's `llj` feed has no cloud-cover field, unlike the old EDR API. This
+ * fills the "X% skyer" stat from the symbol-derived condition instead of
+ * leaving it blank — approximate, and labelled as such wherever it is shown.
+ */
+export const APPROXIMATE_CLOUD_COVER: Record<Condition, number> = {
+  clear: 5,
+  fair: 25,
+  partlycloudy: 45,
+  cloudy: 90,
+  fog: 100,
+  lightrain: 85,
+  rain: 95,
+  heavyrain: 100,
+  sleet: 95,
+  snow: 90,
+  thunder: 95,
+};

@@ -1,112 +1,119 @@
 import { describe, expect, it } from "vitest";
-import {
-  buildDmiUrl,
-  type DmiResponse,
-  deaccumulate,
-  normaliseDmi,
-} from "../providers/dmi";
+import { buildDmiUrl, type DmiResponse, normaliseDmi } from "../providers/dmi";
 import { buildYrUrl, normaliseYr, type YrResponse } from "../providers/yr";
 
-function dmiFeature(step: string, overrides: Record<string, number> = {}) {
+function dmiEntry(
+  localTimeIso: string,
+  overrides: Record<string, number> = {},
+) {
   return {
-    type: "Feature" as const,
-    geometry: {
-      type: "Point" as const,
-      coordinates: [12.5683, 55.6761] as [number, number],
-    },
-    properties: {
-      step,
-      "temperature-2m": 288.15,
-      "total-precipitation": 0,
-      "wind-speed-10m": 5,
-      "wind-dir-10m": 270,
-      "fraction-of-cloud-cover": 0.5,
-      "relative-humidity-2m": 70,
-      ...overrides,
-    },
+    localTimeIso,
+    temp: 15,
+    symbol: 1,
+    precip1: 0,
+    windSpeed: 5,
+    windDegree: 270,
+    humidity: 70,
+    visibility: 25_000,
+    ...overrides,
+  };
+}
+
+function dmiResponse(timeserie: ReturnType<typeof dmiEntry>[]): DmiResponse {
+  return {
+    id: "2614481",
+    city: "Roskilde",
+    timezone: "Europe/Copenhagen",
+    timeserie,
   };
 }
 
 describe("normaliseDmi", () => {
-  it("converts Kelvin to Celsius and cloud fractions to percentages", () => {
-    const data: DmiResponse = {
-      type: "FeatureCollection",
-      features: [dmiFeature("2026-08-21T10:00:00Z")],
-    };
+  it("keeps Celsius as it arrives, since DMI's own feed is already Celsius", () => {
+    const data = dmiResponse([
+      dmiEntry("2026-08-21T10:00:00+02:00", { temp: 15 }),
+    ]);
     const [hour] = normaliseDmi(data);
-    expect(hour.temperature).toBeCloseTo(15, 6);
-    expect(hour.cloudCover).toBeCloseTo(50, 6);
+    expect(hour.temperature).toBe(15);
   });
 
-  it("places each hour on the Copenhagen calendar, not the UTC one", () => {
-    const data: DmiResponse = {
-      type: "FeatureCollection",
-      features: [dmiFeature("2026-08-20T23:00:00Z")],
-    };
+  it("places each hour on the Copenhagen calendar, from the local-time field", () => {
+    const data = dmiResponse([dmiEntry("2026-08-21T01:00:00+02:00")]);
     const [hour] = normaliseDmi(data);
     expect(hour.day).toBe("2026-08-21");
     expect(hour.hour).toBe(1);
   });
 
-  it("sorts out-of-order features", () => {
-    const data: DmiResponse = {
-      type: "FeatureCollection",
-      features: [
-        dmiFeature("2026-08-21T12:00:00Z"),
-        dmiFeature("2026-08-21T10:00:00Z"),
-      ],
-    };
-    expect(normaliseDmi(data).map((hour) => hour.hour)).toEqual([12, 14]);
+  it("sorts out-of-order entries", () => {
+    const data = dmiResponse([
+      dmiEntry("2026-08-21T12:00:00+02:00"),
+      dmiEntry("2026-08-21T10:00:00+02:00"),
+    ]);
+    expect(normaliseDmi(data).map((hour) => hour.hour)).toEqual([10, 12]);
   });
 
   it("drops entries with no temperature rather than reporting a fake 0 °C", () => {
-    const broken = dmiFeature("2026-08-21T11:00:00Z");
-    delete (broken.properties as Record<string, unknown>)["temperature-2m"];
-    const data: DmiResponse = {
-      type: "FeatureCollection",
-      features: [dmiFeature("2026-08-21T10:00:00Z"), broken],
-    };
+    const broken = dmiEntry("2026-08-21T11:00:00+02:00");
+    delete (broken as Record<string, unknown>).temp;
+    const data = dmiResponse([dmiEntry("2026-08-21T10:00:00+02:00"), broken]);
     expect(normaliseDmi(data)).toHaveLength(1);
   });
 
   it("returns an empty list for an empty response", () => {
-    expect(normaliseDmi({ type: "FeatureCollection", features: [] })).toEqual(
-      [],
+    expect(
+      normaliseDmi({
+        id: "0",
+        city: "",
+        timezone: "Europe/Copenhagen",
+        timeserie: [],
+      }),
+    ).toEqual([]);
+  });
+
+  it("measures coverage from the gap to the next entry, as DMI's resolution degrades", () => {
+    const hours = normaliseDmi(
+      dmiResponse([
+        dmiEntry("2026-08-21T10:00:00+02:00"),
+        dmiEntry("2026-08-21T11:00:00+02:00"),
+        // Resolution drops to three-hourly, then six-hourly.
+        dmiEntry("2026-08-21T14:00:00+02:00", { precip3: 1.5 }),
+        dmiEntry("2026-08-21T20:00:00+02:00", { precip6: 3 }),
+      ]),
     );
-  });
-});
-
-describe("deaccumulate", () => {
-  it("leaves an ordinary per-hour series alone", () => {
-    expect(deaccumulate([0, 0.4, 0.1, 0, 1.2])).toEqual([0, 0.4, 0.1, 0, 1.2]);
+    expect(hours.map((hour) => hour.coversHours)).toEqual([1, 3, 6, 6]);
   });
 
-  it("leaves an all-zero series alone", () => {
-    expect(deaccumulate([0, 0, 0])).toEqual([0, 0, 0]);
+  it("takes the precipitation window matching the gap rather than always precip1", () => {
+    const hours = normaliseDmi(
+      dmiResponse([
+        // A 3-hour gap to the next entry: precip3, not precip1, is the
+        // honest total for the window this entry covers.
+        dmiEntry("2026-08-21T10:00:00+02:00", { precip1: 0.2, precip3: 1.2 }),
+        dmiEntry("2026-08-21T13:00:00+02:00", { precip1: 0.1 }),
+      ]),
+    );
+    expect(hours[0].precipitation).toBe(1.2);
   });
 
-  it("converts a never-decreasing series into per-step amounts", () => {
-    // The first entry's accumulation began before the requested window, so it
-    // has no honest per-step value and becomes zero.
-    expect(deaccumulate([1.0, 1.5, 1.5, 3.0])).toEqual([0, 0.5, 0, 1.5]);
-  });
-
-  it("never produces a negative amount", () => {
-    expect(deaccumulate([2, 2, 2, 5]).every((value) => value >= 0)).toBe(true);
+  it("derives a condition from its own symbol code, distinct from a bare cloud/precip guess", () => {
+    // Symbol 63 is DMI's "rain" code; without it the same cloud cover and a
+    // dry hour would read as merely cloudy.
+    const [hour] = normaliseDmi(
+      dmiResponse([
+        dmiEntry("2026-08-21T10:00:00+02:00", { symbol: 63, precip1: 0 }),
+      ]),
+    );
+    expect(hour.symbol).toBe("63");
   });
 });
 
 describe("buildDmiUrl", () => {
-  it("asks for the requested window at the un-authenticated host", () => {
-    const url = new URL(
-      buildDmiUrl(55.6761, 12.5683, new Date("2026-08-21T10:00:00Z"), 7),
-    );
-    expect(url.host).toBe("opendataapi.dmi.dk");
-    expect(url.searchParams.get("coords")).toBe("POINT(12.5683 55.6761)");
-    expect(url.searchParams.get("datetime")).toBe(
-      "2026-08-21T10:00:00.000Z/2026-08-28T10:00:00.000Z",
-    );
-    expect(url.searchParams.get("parameter-name")).toContain("temperature-2m");
+  it("asks dmi.dk's own frontend endpoint for the given GeoNames id", () => {
+    const url = new URL(buildDmiUrl(2614481));
+    expect(url.host).toBe("www.dmi.dk");
+    expect(url.pathname).toBe("/NinJo2DmiDk/ninjo2dmidk");
+    expect(url.searchParams.get("cmd")).toBe("llj");
+    expect(url.searchParams.get("id")).toBe("2614481");
   });
 });
 

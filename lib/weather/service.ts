@@ -8,12 +8,7 @@ import {
   type YrResponse,
   yrUserAgent,
 } from "./providers/yr";
-import {
-  type ForecastResponse,
-  type HourlyForecast,
-  PROVIDERS,
-  type ProviderId,
-} from "./types";
+import type { ForecastResponse, HourlyForecast, ProviderId } from "./types";
 
 type CachedForecast = { hours: HourlyForecast[]; updatedAt: string };
 
@@ -93,14 +88,14 @@ async function loadDmi(
   location: Location,
   cacheKey: string,
 ): Promise<CachedForecast> {
-  const lat = roundCoordinate(location.lat);
-  const lon = roundCoordinate(location.lon);
-
   if (mockEnabled()) {
-    return store(cacheKey, normaliseDmi(mockDmiResponse(lat, lon)));
+    return store(
+      cacheKey,
+      normaliseDmi(mockDmiResponse(location.lat, location.lon)),
+    );
   }
 
-  const url = buildDmiUrl(lat, lon, new Date(), PROVIDERS.dmi.horizonDays);
+  const url = buildDmiUrl(location.dmiGeonameId);
   const { data } = await fetchJson<DmiResponse>(url, {});
   const hours = normaliseDmi(data as DmiResponse);
   if (hours.length === 0) {

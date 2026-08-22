@@ -6,6 +6,20 @@ export type Location = {
   region: string;
   lat: number;
   lon: number;
+  /**
+   * DMI's GeoNames id for this town, e.g. the `2614481` in
+   * `dmi.dk/lokation/show/DK/2614481/Roskilde/`. DMI's own site (and the
+   * `ninjo2dmidk`/`dmidk_byvejrWS` endpoints it calls) is keyed by this id
+   * rather than by coordinates, so it has to be looked up once per town
+   * rather than derived from lat/lon.
+   */
+  dmiGeonameId: number;
+  /**
+   * Nearest DMI water-level station, from `dmidk_byvejrWS/rest/vandstand/active`.
+   * Not every town has one close enough to be meaningful; omitted rather than
+   * pointing at a station tens of kilometres away.
+   */
+  dmiTideStationId?: string;
 };
 
 /**
@@ -23,6 +37,8 @@ export const LOCATIONS: Location[] = [
     region: "Hovedstaden",
     lat: 55.6761,
     lon: 12.5683,
+    dmiGeonameId: 2618425,
+    dmiTideStationId: "30336",
   },
   {
     id: "aarhus",
@@ -30,6 +46,8 @@ export const LOCATIONS: Location[] = [
     region: "Midtjylland",
     lat: 56.1629,
     lon: 10.2039,
+    dmiGeonameId: 2624652,
+    dmiTideStationId: "22331",
   },
   {
     id: "odense",
@@ -37,6 +55,8 @@ export const LOCATIONS: Location[] = [
     region: "Syddanmark",
     lat: 55.4038,
     lon: 10.4024,
+    dmiGeonameId: 2615876,
+    dmiTideStationId: "28086",
   },
   {
     id: "aalborg",
@@ -44,6 +64,8 @@ export const LOCATIONS: Location[] = [
     region: "Nordjylland",
     lat: 57.0488,
     lon: 9.9217,
+    dmiGeonameId: 2624886,
+    dmiTideStationId: "20303",
   },
   {
     id: "esbjerg",
@@ -51,6 +73,8 @@ export const LOCATIONS: Location[] = [
     region: "Syddanmark",
     lat: 55.4765,
     lon: 8.4594,
+    dmiGeonameId: 2622447,
+    dmiTideStationId: "25149",
   },
   {
     id: "roskilde",
@@ -58,6 +82,8 @@ export const LOCATIONS: Location[] = [
     region: "Sjælland",
     lat: 55.6415,
     lon: 12.0803,
+    dmiGeonameId: 2614481,
+    dmiTideStationId: "30409",
   },
   {
     id: "helsingoer",
@@ -65,6 +91,10 @@ export const LOCATIONS: Location[] = [
     region: "Hovedstaden",
     lat: 56.0361,
     lon: 12.6136,
+    dmiGeonameId: 2620473,
+    // No station at Helsingør itself; Sletten Havn (~12 km south) is the
+    // nearest one DMI publishes water levels for.
+    dmiTideStationId: "30042",
   },
   {
     id: "vejle",
@@ -72,6 +102,8 @@ export const LOCATIONS: Location[] = [
     region: "Syddanmark",
     lat: 55.7093,
     lon: 9.5358,
+    dmiGeonameId: 2610613,
+    dmiTideStationId: "23259",
   },
   {
     id: "roenne",
@@ -79,6 +111,8 @@ export const LOCATIONS: Location[] = [
     region: "Bornholm",
     lat: 55.0999,
     lon: 14.7009,
+    dmiGeonameId: 2614553,
+    dmiTideStationId: "32096",
   },
   {
     id: "skagen",
@@ -86,6 +120,8 @@ export const LOCATIONS: Location[] = [
     region: "Nordjylland",
     lat: 57.7211,
     lon: 10.5839,
+    dmiGeonameId: 2613939,
+    dmiTideStationId: "20003",
   },
 ];
 

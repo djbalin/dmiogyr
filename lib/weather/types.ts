@@ -59,9 +59,13 @@ export type HourlyForecast = {
   /** Percent, 0-100. */
   humidity: number;
   /**
-   * Provider-supplied weather symbol, when there is one. Yr publishes these;
-   * DMI does not, so for DMI it stays undefined and the icon is derived from
-   * cloud cover and precipitation instead.
+   * Metres. Only DMI publishes this; used to detect fog, which its symbol
+   * codes otherwise have no way to signal.
+   */
+  visibility?: number;
+  /**
+   * Provider-supplied weather symbol. Yr's are strings like "partlycloudy_day";
+   * DMI's are its own numeric codes as a string (see `conditionFromDmiSymbol`).
    */
   symbol?: string;
   /**

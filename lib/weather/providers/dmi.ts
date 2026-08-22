@@ -1,112 +1,126 @@
+import { APPROXIMATE_CLOUD_COVER, conditionFromDmiSymbol } from "../conditions";
 import { zonedDayKey, zonedHour } from "../time";
 import type { HourlyForecast } from "../types";
 
-/** The parameters we ask DMI's EDR API for. */
-export const DMI_PARAMETERS = [
-  "temperature-2m",
-  "total-precipitation",
-  "wind-speed-10m",
-  "wind-dir-10m",
-  "fraction-of-cloud-cover",
-  "relative-humidity-2m",
-] as const;
-
-type DmiParameter = (typeof DMI_PARAMETERS)[number];
-
-type DmiFeature = {
-  type: "Feature";
-  geometry: { type: "Point"; coordinates: [number, number] };
-  properties: { step: string } & Partial<Record<DmiParameter, number>>;
+/**
+ * One entry of DMI's own `timeserie`. Field names are DMI's, undocumented
+ * outside their own frontend — this is the shape returned by the endpoint
+ * dmi.dk's own location pages call, reverse-engineered from its network
+ * traffic (opendataapi.dmi.dk's public EDR API, previously used here, had
+ * stopped returning usable forecasts).
+ */
+type DmiTimeserieEntry = {
+  /** Local time with UTC offset, e.g. "2026-08-22T20:00:00+02:00". */
+  localTimeIso: string;
+  /** Degrees Celsius. */
+  temp: number;
+  /** DMI's own numeric weather-symbol code; see `conditionFromDmiSymbol`. */
+  symbol: number;
+  /** Millimetres in the hour starting at this entry. */
+  precip1: number;
+  /** Millimetres over the 3 hours starting at this entry. */
+  precip3?: number;
+  /** Millimetres over the 6 hours starting at this entry. */
+  precip6?: number;
+  /** Compass direction the wind blows *from*, in degrees. */
+  windDegree: number;
+  /** Metres per second. */
+  windSpeed: number;
+  /** Percent, 0-100. */
+  humidity: number;
+  /** Metres. */
+  visibility?: number;
 };
 
 export type DmiResponse = {
-  type: "FeatureCollection";
-  features: DmiFeature[];
+  id: string;
+  city: string;
+  timezone: string;
+  timeserie: DmiTimeserieEntry[];
 };
 
-const KELVIN = 273.15;
+/**
+ * DMI's own site is keyed by GeoNames id rather than by coordinates — see
+ * `Location.dmiGeonameId`.
+ */
+export function buildDmiUrl(geonameId: number): string {
+  return `https://www.dmi.dk/NinJo2DmiDk/ninjo2dmidk?cmd=llj&id=${geonameId}`;
+}
 
-export function buildDmiUrl(
-  lat: number,
-  lon: number,
-  from: Date,
-  horizonDays: number,
-): string {
-  const until = new Date(from.getTime() + horizonDays * 86_400_000);
-  const coords = `POINT(${lon} ${lat})`;
-  const datetime = `${from.toISOString()}/${until.toISOString()}`;
-  const query = new URLSearchParams({
-    coords,
-    crs: "crs84",
-    "parameter-name": DMI_PARAMETERS.join(","),
-    datetime,
-    f: "GeoJSON",
-  });
-  // DMI moved their open data APIs to opendataapi.dmi.dk, which needs no
-  // authentication. The old dmigw.govcloud.dk host still demands an API key
-  // and is deprecated.
-  // https://www.dmi.dk/friedata/dokumentation/forecast-data-edr-api
-  return `https://opendataapi.dmi.dk/v1/forecastedr/collections/harmonie_dini_sf/position?${query}`;
+const MS_PER_HOUR = 3_600_000;
+
+/** Whole hours between two entries. */
+function hoursBetween(
+  from: DmiTimeserieEntry | undefined,
+  to: DmiTimeserieEntry | undefined,
+): number | null {
+  if (!from || !to) return null;
+  const hours = Math.round(
+    (new Date(to.localTimeIso).getTime() -
+      new Date(from.localTimeIso).getTime()) /
+      MS_PER_HOUR,
+  );
+  return hours > 0 ? hours : null;
 }
 
 /**
- * Turn a precipitation series that accumulates over the forecast into
- * per-step amounts.
- *
- * DMI's documentation does not make it unambiguous whether
- * `total-precipitation` arrives accumulated from the model's start or already
- * de-accumulated per step, and it has changed across API versions. Rather than
- * guess, detect it: a genuine per-hour series over a week of weather will fall
- * back to zero many times over, so a series that never once decreases and does
- * increase is accumulated. An all-zero series has no increases and is left
- * alone.
+ * The precipitation amount matching a gap of `coversHours`, preferring the
+ * narrowest window DMI reports that still covers it. Falls back to scaling
+ * the widest window available when the gap is wider than any of them (should
+ * not happen in practice, but better than silently dropping rain).
  */
-export function deaccumulate(values: number[]): number[] {
-  const increases = values.some((value, i) => i > 0 && value > values[i - 1]);
-  const decreases = values.some((value, i) => i > 0 && value < values[i - 1]);
-  if (!increases || decreases) return values;
-  // The first entry's accumulation started before the window we asked for, so
-  // there is no honest per-step value for it: call it zero rather than
-  // reporting a week of rain as falling in the first hour.
-  return values.map((value, i) =>
-    i === 0 ? 0 : Math.max(0, value - values[i - 1]),
-  );
+function precipitationFor(
+  entry: DmiTimeserieEntry,
+  coversHours: number,
+): number {
+  if (coversHours <= 1) return entry.precip1 ?? 0;
+  if (coversHours <= 3 && entry.precip3 !== undefined) return entry.precip3;
+  if (entry.precip6 !== undefined) {
+    return coversHours <= 6 ? entry.precip6 : entry.precip6 * (coversHours / 6);
+  }
+  return entry.precip3 ?? entry.precip1 ?? 0;
 }
 
 export function normaliseDmi(data: DmiResponse): HourlyForecast[] {
-  const features = (data.features ?? [])
-    // An entry with no timestamp or no temperature cannot be placed on the
-    // grid or drawn; dropping it beats rendering a fabricated 0 °C.
+  const entries = (data?.timeserie ?? [])
     .filter(
-      (feature) =>
-        Boolean(feature?.properties?.step) &&
-        typeof feature.properties["temperature-2m"] === "number",
+      (entry) => Boolean(entry?.localTimeIso) && typeof entry.temp === "number",
     )
-    .sort((a, b) => a.properties.step.localeCompare(b.properties.step));
+    .sort((a, b) => a.localTimeIso.localeCompare(b.localTimeIso));
 
-  if (features.length === 0) return [];
+  return entries.map((entry, index) => {
+    const time = new Date(entry.localTimeIso);
+    const next = entries[index + 1];
+    const previous = entries[index - 1];
+    // DMI's own resolution degrades from hourly to 3-hourly to 6-hourly over
+    // the forecast window; the last entry inherits the spacing of the one
+    // before it, for want of a successor to measure against.
+    const coversHours =
+      hoursBetween(entry, next) ?? hoursBetween(previous, entry) ?? 1;
+    const precipitation = precipitationFor(entry, coversHours);
+    const symbol = String(entry.symbol);
+    // DMI's `llj` feed carries no cloud-cover field, unlike the EDR API this
+    // replaces. Approximate it from the symbol's condition rather than
+    // showing a fabricated 0%.
+    const condition = conditionFromDmiSymbol(symbol, {
+      precipitation,
+      visibility: entry.visibility,
+    });
+    const cloudCover = condition ? APPROXIMATE_CLOUD_COVER[condition] : 50;
 
-  const precipitation = deaccumulate(
-    features.map((feature) => feature.properties["total-precipitation"] ?? 0),
-  );
-
-  return features.map((feature, index) => {
-    const time = new Date(feature.properties.step);
-    const properties = feature.properties;
     return {
       time: time.toISOString(),
       day: zonedDayKey(time),
       hour: zonedHour(time),
-      // DMI reports temperature in Kelvin and cloud cover as a fraction of one.
-      temperature: (properties["temperature-2m"] as number) - KELVIN,
-      precipitation: precipitation[index],
-      windSpeed: properties["wind-speed-10m"] ?? 0,
-      windDirection: properties["wind-dir-10m"] ?? 0,
-      cloudCover: (properties["fraction-of-cloud-cover"] ?? 0) * 100,
-      humidity: properties["relative-humidity-2m"] ?? 0,
-      // DMI publishes no symbol codes, so the icon is derived from these
-      // values at render time.
-      coversHours: 1,
+      temperature: entry.temp,
+      precipitation,
+      windSpeed: entry.windSpeed ?? 0,
+      windDirection: entry.windDegree ?? 0,
+      cloudCover,
+      humidity: entry.humidity ?? 0,
+      visibility: entry.visibility,
+      symbol,
+      coversHours,
     };
   });
 }

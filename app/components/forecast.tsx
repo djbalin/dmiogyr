@@ -12,6 +12,7 @@ import {
   type ProviderId,
 } from "@/lib/weather/types";
 import { DayCard, type DayData, DayListHeader } from "./day-card";
+import { DmiExtrasSection } from "./dmi-extras";
 import { LocationPicker } from "./location-picker";
 import { NowPanel } from "./now-panel";
 import { PROVIDER_STYLES, RefreshIcon, Skeleton, WarningIcon } from "./ui";
@@ -279,6 +280,8 @@ export function Forecast({
           now={now ?? new Date()}
           loading={anyLoading}
         />
+
+        <DmiExtrasSection locationId={location.id} />
 
         <ProviderStatus states={states} onRetry={retry} />
 
