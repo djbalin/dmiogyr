@@ -1,192 +1,175 @@
-# Copenhagen Weather Comparison
+# DMI og Yr
 
-A Next.js weather application that compares hourly forecasts from two meteorological services side by side:
+Two weather forecasts for the same Danish town, side by side, hour by hour — so
+you can see where the Danish Meteorological Institute and MET Norway's Yr
+disagree.
 
-- **DMI** (Danish Meteorological Institute) - HARMONIE DINI model
-- **Yr** (MET Norway) - Global forecast coverage
+A forecast on its own tells you what to expect. Two forecasts tell you how much
+to trust it, which is the question this app is built to answer: every day row
+carries both providers' numbers and, where they part company by a degree or
+more, says so.
 
-## Features
+<p align="center">
+  <img src="docs/screenshot-light.png" width="49%" alt="Forecast comparison in light mode">
+  <img src="docs/screenshot-dark.png" width="49%" alt="The same forecast in dark mode">
+</p>
 
-✨ **Dual Provider Comparison**: View forecasts from both DMI and Yr simultaneously  
-🔄 **Independent Loading**: Each provider loads independently with separate loading indicators  
-🛡️ **Graceful Error Handling**: If one provider fails, the other still displays  
-📊 **Collapsible Days**: Expand any day to see hourly forecasts  
-🎨 **Color-Coded Providers**: Emerald for DMI, Sky blue for Yr  
-📱 **Responsive Design**: Works on desktop and mobile
-
-## Screenshots
-
-The app displays:
-
-- Side-by-side comparison (desktop) or stacked (mobile)
-- Provider-specific loading states
-- Individual error handling per provider
-- Detailed hourly forecasts when expanded
-- Weather emojis, temperatures, precipitation, wind, clouds, and humidity
-
-## Getting Started
-
-### Prerequisites
-
-- Node.js 18+ (or use a compatible package manager)
-- DMI API Key (get from [DMI's API portal](https://confluence.govcloud.dk/display/FDAPI))
-
-### Installation
+## Getting started
 
 ```bash
-# Install dependencies
 pnpm install
-
-# Create environment file
-echo 'DMI_API_KEY=your_api_key_here' > .env.local
-
-# Run development server
-pnpm dev
+pnpm dev            # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) to see the app.
+Neither provider needs an API key. DMI's open data moved to
+`opendataapi.dmi.dk`, which is unauthenticated; MET Norway asks only for an
+identifying `User-Agent`.
 
-### Environment Variables
-
-Create a `.env.local` file:
+### Working offline
 
 ```bash
-DMI_API_KEY=your_dmi_api_key_here
+pnpm dev:mock       # serves generated fixtures, never touches the network
 ```
 
-**Note**: Yr doesn't require an API key, but uses a User-Agent header (configured automatically).
+`WEATHER_MOCK=1` swaps both upstream calls for synthetic responses in the exact
+upstream wire format — Kelvin and cloud fractions for DMI, Celsius and symbol
+codes for Yr. Everything downstream of the network hop runs for real, so it is
+a faithful way to develop and test without depending on two public services
+being reachable and in a good mood.
 
-## API Structure
+### Configuration
 
-### Endpoints
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `WEATHER_CONTACT` | For production | Contact address embedded in the `User-Agent` sent to MET Norway, as [their terms require](https://developer.yr.no/doc/TermsOfService/). Defaults to this repository's URL. |
+| `WEATHER_MOCK` | No | Set to `1` to serve fixtures instead of calling the providers. |
 
-- `/api/dmi` - DMI weather data (7-day forecast)
-- `/api/yr` - Yr weather data (9-day forecast)
-- `/api/weather` - Default endpoint (currently DMI, for backward compatibility)
+Copy `.env.example` to `.env.local` to set them.
 
-### Data Processing
+## Commands
 
-Both providers are normalized to the same `HourlyForecast` interface:
-
-```typescript
-interface HourlyForecast {
-  timestamp: string;
-  hour: string;
-  dayName: string;
-  temperature: number; // Celsius
-  precipitation: number; // mm
-  windSpeed: number; // m/s
-  windDirection: number; // degrees
-  cloudCover: number; // percentage
-  humidity: number; // percentage
-  pressure: number; // hPa
-  gustSpeed: number; // m/s
-  visibility: number; // meters
-}
+```bash
+pnpm dev            # development server
+pnpm dev:mock       # development server on fixtures
+pnpm build          # production build
+pnpm start          # serve the production build
+pnpm lint           # Biome lint and format check
+pnpm typecheck      # tsc --noEmit
+pnpm test           # Vitest
+pnpm check          # lint + typecheck + test, what CI runs
 ```
 
-## Project Structure
+## How it fits together
 
 ```
 app/
 ├── api/
-│   ├── dmi/              # DMI provider
-│   │   ├── route.ts      # API endpoint
-│   │   └── types.ts      # TypeScript types
-│   ├── yr/               # Yr provider
-│   │   ├── route.ts      # API endpoint (with caching logic)
-│   │   └── types.ts      # TypeScript types
-│   ├── weather/          # Default route
-│   │   └── route.ts
-│   ├── types.ts          # Shared types
-│   └── README.md         # API documentation
-├── utils/
-│   ├── processData.ts    # DMI data processor
-│   └── processYrData.ts  # Yr data processor
-├── page.tsx              # Main UI component
-├── layout.tsx            # App layout
-└── globals.css           # Global styles
+│   ├── dmi/route.ts        # GET /api/dmi?location=<id>
+│   └── yr/route.ts         # GET /api/yr?location=<id>
+├── components/             # the UI, split by responsibility
+│   ├── forecast.tsx        # fetching, state, page composition
+│   ├── day-card.tsx        # a day row and its hourly table
+│   ├── now-panel.tsx       # the "right now" headline
+│   ├── location-picker.tsx
+│   ├── weather-icon.tsx    # inline SVG icon set
+│   └── ui.tsx              # shared primitives and provider styling
+└── page.tsx                # reads ?sted= and renders the client app
+
+lib/weather/
+├── types.ts                # HourlyForecast, the shared shape
+├── time.ts                 # everything timezone-aware
+├── sun.ts                  # sunrise/sunset, computed locally
+├── conditions.ts           # the closed set of weather conditions
+├── aggregate.ts            # grouping, day summaries, provider spread
+├── cache.ts                # TTL cache with stale-on-error
+├── service.ts              # fetch, normalise, cache, degrade
+├── locations.ts            # the towns you can pick
+├── mock.ts                 # fixture generation for WEATHER_MOCK
+└── providers/
+    ├── dmi.ts              # DMI request building and normalisation
+    └── yr.ts               # Yr request building and normalisation
 ```
 
-## Technologies
+### The normalised hour
 
-- **Framework**: Next.js 15 with App Router
-- **Language**: TypeScript
-- **Styling**: Tailwind CSS 4
-- **Linting**: Biome
-- **Fonts**: Geist Sans & Geist Mono
+Both providers are reduced to one shape before anything renders:
 
-## API Providers
-
-### DMI (Danish Meteorological Institute)
-
-- **Model**: HARMONIE DINI SF
-- **Coverage**: 7 days, hourly
-- **Focus**: Nordic region
-- **Auth**: API Key
-- **Docs**: [DMI API Documentation](https://opendatadocs.dmi.govcloud.dk/)
-
-### Yr (MET Norway)
-
-- **Model**: Multiple (ECMWF, MEPS, etc.)
-- **Coverage**: 9 days, hourly
-- **Focus**: Global
-- **Auth**: User-Agent (identifying header)
-- **Docs**: [Yr Developer Portal](https://developer.yr.no/)
-- **Implementation**: Follows [official best practices](https://developer.yr.no/doc/locationforecast/HowTO/)
-
-## Development
-
-```bash
-# Install dependencies
-pnpm install
-
-# Run dev server
-pnpm dev
-
-# Build for production
-pnpm build
-
-# Start production server
-pnpm start
-
-# Lint code
-pnpm lint
-
-# Format code
-pnpm format
+```ts
+type HourlyForecast = {
+  time: string;          // ISO-8601 UTC instant
+  day: string;           // "YYYY-MM-DD" in Europe/Copenhagen
+  hour: number;          // 0-23 in Europe/Copenhagen
+  temperature: number;   // °C
+  precipitation: number; // mm over `coversHours`
+  windSpeed: number;     // m/s
+  windDirection: number; // degrees the wind blows *from*
+  cloudCover: number;    // %
+  humidity: number;      // %
+  symbol?: string;       // Yr's own code, where there is one
+  coversHours: number;   // 1 hourly, 6 once Yr coarsens
+};
 ```
 
-## Caching
+`day` and `hour` are resolved in `Europe/Copenhagen`, not in the viewer's
+timezone. A Danish forecast has Danish days regardless of where it is read
+from, and pinning it also keeps the server and client renders identical.
 
-- **DMI**: Uses Next.js built-in caching (1-hour revalidation)
-- **Yr**: Implements manual caching with `Expires` and `If-Modified-Since` headers per Yr's guidelines
-  - Respects 304 Not Modified responses
-  - Falls back to stale data on errors
-  - Handles throttling (429 responses)
+### Design notes
 
-## Production Considerations
+**Sunrise and sunset are computed, not fetched.** `lib/weather/sun.ts`
+implements the NOAA solar equations, which agree with published Copenhagen
+times to within a minute. That removes seven network round-trips per page load,
+removes the failure mode where a slow sunrise API left the whole forecast
+blank, and removes a hardcoded `+01:00` offset that was an hour wrong for half
+the year.
 
-1. **Yr Cache**: Replace in-memory cache with Redis for multi-instance deployments
-2. **User-Agent**: Update the User-Agent string in `/app/api/yr/route.ts` with your contact info
-3. **Error Monitoring**: Add error tracking (Sentry, etc.)
-4. **Rate Limiting**: Implement rate limiting on your endpoints
-5. **Multiple Locations**: Extend beyond Copenhagen
+**Precipitation is handled by rate, not by total.** Yr reports six-hourly
+blocks past the first couple of days, so every entry carries `coversHours` and
+anything that compares precipitation divides by it first. Otherwise a wet
+afternoon and a drizzly day look the same.
 
-## Documentation
+**DMI's accumulation is detected rather than assumed.** DMI's documentation is
+ambiguous about whether `total-precipitation` arrives per step or accumulated
+over the forecast, so `deaccumulate()` looks: a series that never once
+decreases across a week is accumulated and gets differenced, and anything else
+is passed through untouched.
 
-- [API Documentation](app/api/README.md) - Detailed API docs
-- [Provider Comparison](WEATHER_PROVIDERS.md) - DMI vs Yr comparison
+**A provider that fails degrades, it does not take the page down.** The service
+keeps the last good response for up to twelve hours and serves it with a
+`stale` marker, which the UI shows as a banner. Each provider loads, fails and
+retries independently, so one being down still leaves you a forecast.
 
-## License
+**Colour is never the only signal.** Every number carries a `DMI` or `Yr` tag
+rather than relying on teal versus indigo.
 
-This project is open source and available under the MIT License.
+## Providers
 
-## Contributing
+|  | DMI | Yr |
+| --- | --- | --- |
+| Model | HARMONIE DINI SF | ECMWF / MEPS |
+| Horizon | 7 days | 9 days |
+| Resolution | Hourly | Hourly, then 6-hourly |
+| Coverage | Nordic region | Global |
+| Auth | None | Identifying `User-Agent` |
+| Temperature | Kelvin | Celsius |
+| Cloud cover | Fraction 0–1 | Percent 0–100 |
+| Weather symbols | None | Yes |
+| Docs | [DMI](https://opendatadocs.dmi.govcloud.dk/) | [Yr](https://developer.yr.no/) |
 
-Contributions are welcome! Feel free to open issues or submit pull requests.
+The location list is deliberately a fixed set of Danish towns rather than a
+free-text geocoder: DMI's model only covers the Nordic region, so anywhere it
+cannot forecast would defeat the comparison.
 
-## Credits
+## Deploying
 
-- Weather data from [DMI](https://www.dmi.dk/) and [MET Norway (Yr)](https://www.yr.no/)
-- Built with [Next.js](https://nextjs.org/)
+The forecast cache in `lib/weather/cache.ts` lives in module memory, which
+means one cache per server instance and nothing surviving a cold start. That is
+fine for a single instance; behind more than one, move it to Redis or the
+platform's own data cache. The interface is small on purpose.
+
+Set `WEATHER_CONTACT` before deploying, so MET Norway can reach whoever is
+running it.
+
+## Licence
+
+MIT.
