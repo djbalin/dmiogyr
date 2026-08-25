@@ -22,6 +22,7 @@ import {
   PROVIDER_IDS,
   type ProviderId,
 } from "@/lib/weather/types";
+import { uvColor } from "@/lib/weather/uv";
 import { ChevronIcon, PROVIDER_STYLES, ProviderTag, WindArrow } from "./ui";
 import { WeatherIcon } from "./weather-icon";
 
@@ -43,6 +44,8 @@ export type DayData = {
   day: string;
   sun: SunTimes;
   summaries: Partial<Record<ProviderId, DaySummary>>;
+  /** DMI's forecast UV-index maximum for the day, when it has one. */
+  uv?: number;
 };
 
 export function DayListHeader() {
@@ -194,7 +197,7 @@ export function DayCard({
   onToggle: () => void;
 }) {
   const panelId = useId();
-  const { day, sun, summaries } = data;
+  const { day, sun, summaries, uv } = data;
   const spread = temperatureSpread(summaries.dmi ?? null, summaries.yr ?? null);
   const label = relativeDayLabel(day, today);
 
@@ -217,7 +220,10 @@ export function DayCard({
               <span className="block text-sm text-ink-muted">
                 {danishDate(day)}
               </span>
-              <SunLine sun={sun} />
+              <div className="mt-0.5 flex items-center gap-1.5">
+                <SunLine sun={sun} />
+                {uv !== undefined && <UvBadge uv={uv} />}
+              </div>
               {spread !== null && spread >= 1 && (
                 <SpreadBadge spread={spread} className="mt-1.5" />
               )}
@@ -296,7 +302,10 @@ export function DayCard({
                 );
               })}
             </div>
-            <SunLine sun={sun} className="mt-2" />
+            <div className="mt-2 flex items-center gap-1.5">
+              <SunLine sun={sun} />
+              {uv !== undefined && <UvBadge uv={uv} />}
+            </div>
           </div>
         </button>
       </h3>
@@ -328,6 +337,23 @@ function SunLine({
       ) : (
         "Solen går ikke ned"
       )}
+    </span>
+  );
+}
+
+/**
+ * DMI's UV-index badge: just the number, ringed in the colour of its band —
+ * no "Moderate"/"High" label, the same visual-only treatment DMI itself uses.
+ */
+function UvBadge({ uv }: { uv: number }) {
+  const color = uvColor(uv);
+  return (
+    <span
+      className="numeric inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 text-[10px] font-bold leading-none"
+      style={{ borderColor: color, color }}
+      title={`UV-indeks ${uv.toFixed(1)}`}
+    >
+      {Math.round(uv)}
     </span>
   );
 }

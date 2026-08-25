@@ -12,7 +12,8 @@ import {
   type ProviderId,
 } from "@/lib/weather/types";
 import { DayCard, type DayData, DayListHeader } from "./day-card";
-import { DmiExtrasSection } from "./dmi-extras";
+import { DmiExtrasBottom, DmiExtrasTop, useDmiExtras } from "./dmi-extras";
+import { ForecastChart } from "./forecast-chart";
 import { LocationPicker } from "./location-picker";
 import { NowPanel } from "./now-panel";
 import { PROVIDER_STYLES, RefreshIcon, Skeleton, WarningIcon } from "./ui";
@@ -176,6 +177,8 @@ export function Forecast({
 
   const today = useMemo(() => todayKey(undefined, now ?? new Date()), [now]);
 
+  const { extras, loading: extrasLoading } = useDmiExtras(location.id);
+
   const days = useMemo<DayData[]>(() => {
     const grouped = PROVIDER_IDS.map((provider) => ({
       provider,
@@ -200,11 +203,14 @@ export function Forecast({
           const summary = summariseDay(day, hours, sun);
           if (summary) summaries[provider] = summary;
         }
+        const uv = extras?.details?.uv.find((entry) => entry.date === day)?.max;
         // A trailing day with an hour or two of data is noise, not a forecast.
-        return total >= 3 ? { day, sun, summaries } : null;
+        const result: DayData | null =
+          total >= 3 ? { day, sun, summaries, uv } : null;
+        return result;
       })
       .filter((day): day is DayData => day !== null);
-  }, [states, today, location.lat, location.lon]);
+  }, [states, today, location.lat, location.lon, extras]);
 
   // One temperature scale across the whole week, so the range bars can be
   // compared between days rather than each being drawn to its own scale.
@@ -281,7 +287,14 @@ export function Forecast({
           loading={anyLoading}
         />
 
-        <DmiExtrasSection locationId={location.id} />
+        <ForecastChart
+          forecasts={forecasts}
+          now={now ?? new Date()}
+          loading={anyLoading}
+          location={location}
+        />
+
+        <DmiExtrasTop extras={extras} loading={extrasLoading} />
 
         <ProviderStatus states={states} onRetry={retry} />
 
@@ -309,6 +322,8 @@ export function Forecast({
             ))}
           </section>
         )}
+
+        <DmiExtrasBottom extras={extras} loading={extrasLoading} />
       </div>
 
       <footer className="mt-8 space-y-1 text-sm text-ink-faint">

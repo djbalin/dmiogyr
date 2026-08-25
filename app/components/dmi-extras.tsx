@@ -8,14 +8,19 @@ import { Skeleton, WarningIcon } from "./ui";
 
 /**
  * Everything dmi.dk's own location page shows beyond the hourly forecast:
- * its written regional forecast, sun times and UV index, active weather
- * warnings, and — for towns near the coast — the water level.
+ * its written regional forecast, sun times, active weather warnings, and —
+ * for towns near the coast — the water level. (UV index rides along with
+ * the day-by-day table instead, as a badge, since it is per-day data like
+ * the rest of that row.)
  *
  * Fetched separately from the DMI/Yr hourly comparison: none of this exists
- * for Yr, so it does not belong in the two-provider grid, and each of these
- * upstream calls is free to fail without taking the forecast down with it.
+ * for Yr, and each of these upstream calls is free to fail without taking
+ * the forecast down with it.
  */
-export function DmiExtrasSection({ locationId }: { locationId: string }) {
+export function useDmiExtras(locationId: string): {
+  extras: DmiExtras | null;
+  loading: boolean;
+} {
   const [extras, setExtras] = useState<DmiExtras | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -31,8 +36,8 @@ export function DmiExtrasSection({ locationId }: { locationId: string }) {
         if (!controller.signal.aborted) setExtras(data);
       })
       .catch(() => {
-        // A failed load just leaves the section empty; the hourly comparison
-        // above it is the part of the page that must not break.
+        // A failed load just leaves these sections empty; the hourly
+        // comparison is the part of the page that must not break.
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
@@ -40,25 +45,23 @@ export function DmiExtrasSection({ locationId }: { locationId: string }) {
     return () => controller.abort();
   }, [locationId]);
 
-  if (loading && !extras) {
-    return (
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Skeleton className="h-32" />
-        <Skeleton className="h-32" />
-      </div>
-    );
-  }
+  return { extras, loading };
+}
 
+/** Warnings banner and sun times — sits right under "Lige nu". */
+export function DmiExtrasTop({
+  extras,
+  loading,
+}: {
+  extras: DmiExtras | null;
+  loading: boolean;
+}) {
+  if (loading && !extras) return <Skeleton className="h-12" />;
   if (!extras) return null;
 
   const hasWarning = extras.warnings && extras.warnings.level !== "none";
-  const hasRegional =
-    extras.details?.regionalForecast.text ||
-    extras.details?.regionalForecast.headline;
-  const hasSunUv = (extras.details?.sun.length ?? 0) > 0;
-  const hasTide = extras.tide && extras.tide.obs.length > 0;
-
-  if (!hasWarning && !hasRegional && !hasSunUv && !hasTide) return null;
+  const hasSun = (extras.details?.sun.length ?? 0) > 0;
+  if (!hasWarning && !hasSun) return null;
 
   return (
     <div className="space-y-4">
@@ -68,16 +71,40 @@ export function DmiExtrasSection({ locationId }: { locationId: string }) {
           count={extras.warnings.warnings.length}
         />
       )}
+      {hasSun && extras.details && <SunCard details={extras.details} />}
+    </div>
+  );
+}
 
-      {(hasRegional || hasSunUv) && (
-        <div className="grid gap-4 sm:grid-cols-2">
-          {hasRegional && extras.details && (
-            <RegionalForecastCard details={extras.details} />
-          )}
-          {hasSunUv && extras.details && <SunUvCard details={extras.details} />}
-        </div>
+/** The regional forecast text and water level — sits below the day table. */
+export function DmiExtrasBottom({
+  extras,
+  loading,
+}: {
+  extras: DmiExtras | null;
+  loading: boolean;
+}) {
+  if (loading && !extras) {
+    return (
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Skeleton className="h-32" />
+        <Skeleton className="h-32" />
+      </div>
+    );
+  }
+  if (!extras) return null;
+
+  const hasRegional =
+    extras.details?.regionalForecast.text ||
+    extras.details?.regionalForecast.headline;
+  const hasTide = extras.tide && extras.tide.obs.length > 0;
+  if (!hasRegional && !hasTide) return null;
+
+  return (
+    <div className="space-y-4">
+      {hasRegional && extras.details && (
+        <RegionalForecastCard details={extras.details} />
       )}
-
       {hasTide && extras.tide && (
         <TidePanel obs={extras.tide.obs} fcst={extras.tide.fcst} />
       )}
@@ -151,35 +178,21 @@ function RegionalForecastCard({
   );
 }
 
-function SunUvCard({
-  details,
-}: {
-  details: NonNullable<DmiExtras["details"]>;
-}) {
+function SunCard({ details }: { details: NonNullable<DmiExtras["details"]> }) {
   const today = details.sun[0];
-  const todayUv = details.uv[0];
+  if (!today) return null;
   return (
     <section className="rounded-2xl border border-line bg-surface p-5 shadow-[var(--shadow)]">
       <h2 className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint">
-        Sol og UV
+        Sol i dag
       </h2>
       <div className="mt-3 flex flex-wrap items-center gap-x-8 gap-y-3">
-        {today && (
-          <>
-            <Stat label="Solopgang" value={today.sunrise} />
-            <Stat label="Solnedgang" value={today.sunset} />
-            <Stat
-              label="Dagslængde"
-              value={formatDayLength(today.dayLengthSeconds)}
-            />
-          </>
-        )}
-        {todayUv && (
-          <Stat
-            label="UV-indeks"
-            value={`${todayUv.max.toFixed(1)} — ${uvLabel(todayUv.max)}`}
-          />
-        )}
+        <Stat label="Solopgang" value={today.sunrise} />
+        <Stat label="Solnedgang" value={today.sunset} />
+        <Stat
+          label="Dagslængde"
+          value={formatDayLength(today.dayLengthSeconds)}
+        />
       </div>
     </section>
   );
@@ -198,15 +211,6 @@ function formatDayLength(seconds: number): string {
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.round((seconds % 3600) / 60);
   return `${hours} t ${minutes} min`;
-}
-
-/** DMI's own UV-index bands. */
-function uvLabel(max: number): string {
-  if (max < 3) return "lav";
-  if (max < 6) return "moderat";
-  if (max < 8) return "høj";
-  if (max < 11) return "meget høj";
-  return "ekstrem";
 }
 
 function TidePanel({
@@ -232,7 +236,7 @@ function TidePanel({
       </div>
       <p className="mt-2 numeric text-3xl font-semibold text-ink">
         {latest.levelCm >= 0 ? "+" : ""}
-        {latest.levelCm} cm
+        {latest.levelCm.toFixed(1)} cm
       </p>
       <p className="text-sm text-ink-muted">i forhold til dagligt vande</p>
       <TideSparkline obs={obs} fcst={fcst} className="mt-4" />
