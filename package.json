@@ -15,7 +15,7 @@
     "check": "pnpm lint && pnpm typecheck && pnpm test"
   },
   "dependencies": {
-    "next": "15.5.4",
+    "next": "15.5.24",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "recharts": "^3.10.1"
