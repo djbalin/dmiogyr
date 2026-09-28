@@ -16,6 +16,7 @@ import { DmiExtrasBottom, DmiExtrasTop, useDmiExtras } from "./dmi-extras";
 import { ForecastChart } from "./forecast-chart";
 import { LocationPicker } from "./location-picker";
 import { NowPanel } from "./now-panel";
+import { SettingsMenu } from "./settings-menu";
 import { PROVIDER_STYLES, RefreshIcon, Skeleton, WarningIcon } from "./ui";
 
 const STORAGE_KEY = "dmiogyr:location";
@@ -239,19 +240,6 @@ export function Forecast({
       .filter((day): day is DayData => day !== null);
   }, [states, today, location.lat, location.lon, extras]);
 
-  // One temperature scale across the whole week, so the range bars can be
-  // compared between days rather than each being drawn to its own scale.
-  const [scaleMin, scaleMax] = useMemo(() => {
-    const values = days.flatMap((day) =>
-      Object.values(day.summaries).flatMap((summary) => [
-        summary.minTemperature,
-        summary.maxTemperature,
-      ]),
-    );
-    if (values.length === 0) return [0, 1];
-    return [Math.floor(Math.min(...values)), Math.ceil(Math.max(...values))];
-  }, [days]);
-
   const forecasts = useMemo(() => {
     const map: Partial<Record<ProviderId, ForecastResponse>> = {};
     for (const provider of PROVIDER_IDS) {
@@ -291,7 +279,7 @@ export function Forecast({
               hvor de er enige.
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <LocationPicker value={location} onChange={changeLocation} />
             <button
               type="button"
@@ -302,6 +290,7 @@ export function Forecast({
               <RefreshIcon spinning={anyLoading} />
               Opdatér
             </button>
+            <SettingsMenu />
           </div>
         </div>
       </header>
@@ -367,8 +356,6 @@ export function Forecast({
                 data={day}
                 today={today}
                 now={now ?? new Date()}
-                scaleMin={scaleMin}
-                scaleMax={scaleMax}
                 open={openDays.has(day.day)}
                 onToggle={() => toggleDay(day.day)}
               />

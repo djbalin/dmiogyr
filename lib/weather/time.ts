@@ -170,6 +170,21 @@ const DANISH_MONTHS_SHORT = [
   "dec.",
 ];
 
+const DANISH_MONTHS = [
+  "januar",
+  "februar",
+  "marts",
+  "april",
+  "maj",
+  "juni",
+  "juli",
+  "august",
+  "september",
+  "oktober",
+  "november",
+  "december",
+];
+
 /**
  * Danish weekday name for a calendar day. Written out rather than delegated to
  * `toLocaleDateString`, so the label never depends on which locale data the
@@ -194,4 +209,19 @@ export function relativeDayLabel(dayKey: string, today: string): string {
   if (dayKey === today) return "I dag";
   if (dayKey === addDays(today, 1)) return "I morgen";
   return danishWeekday(dayKey);
+}
+
+/**
+ * A day's one-line heading in the day table: "I dag, 21. august",
+ * "I morgen, lørdag", then "Søndag 23. august" — relative where that reads
+ * more naturally, with the date carried along so no separate date line is
+ * needed.
+ */
+export function dayHeading(dayKey: string, today: string): string {
+  const [, month, day] = dayKey.split("-").map(Number);
+  const date = `${day}. ${DANISH_MONTHS[month - 1]}`;
+  if (dayKey === today) return `I dag, ${date}`;
+  if (dayKey === addDays(today, 1))
+    return `I morgen, ${danishWeekday(dayKey).toLowerCase()}`;
+  return `${danishWeekday(dayKey)} ${date}`;
 }
