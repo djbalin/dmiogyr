@@ -300,7 +300,7 @@ export function Forecast({
           className={
             nowHidden
               ? ""
-              : "grid gap-4 lg:grid-cols-[minmax(0,1fr)_15rem] lg:items-stretch"
+              : "grid gap-4 lg:grid-cols-[minmax(0,1fr)_16.5rem] lg:items-stretch"
           }
         >
           <ForecastChart
@@ -323,7 +323,8 @@ export function Forecast({
           {!nowHidden && (
             <NowPanel
               forecasts={forecasts}
-              sun={days[0]?.sun ?? null}
+              sun={days[0]?.day === today ? days[0].sun : null}
+              uv={days[0]?.day === today ? days[0].uv : undefined}
               now={now ?? new Date()}
               loading={anyLoading}
               onHide={() => toggleNowHidden(true)}
@@ -333,7 +334,7 @@ export function Forecast({
           )}
         </div>
 
-        <DmiExtrasTop extras={extras} loading={extrasLoading} />
+        <DmiExtrasTop extras={extras} />
 
         <ProviderStatus states={states} onRetry={retry} />
 
