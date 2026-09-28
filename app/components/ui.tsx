@@ -111,6 +111,33 @@ export function WarningIcon({ className = "" }: { className?: string }) {
   );
 }
 
+/** A small sun, tinted with the weather-icon palette's sun colour. */
+export function SunIcon({
+  size = 12,
+  className = "",
+}: {
+  size?: number;
+  className?: string;
+}) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      width={size}
+      height={size}
+      aria-hidden="true"
+      className={`shrink-0 ${className}`}
+    >
+      <circle cx="8" cy="8" r="3.2" fill="var(--icon-sun)" />
+      <path
+        d="M8 1v1.8M8 13.2V15M1 8h1.8M13.2 8H15M3.05 3.05l1.27 1.27M11.68 11.68l1.27 1.27M3.05 12.95l1.27-1.27M11.68 4.32l1.27-1.27"
+        stroke="var(--icon-sun)"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 /** An arrow pointing the way the wind is blowing *towards*. */
 export function WindArrow({
   degrees,
