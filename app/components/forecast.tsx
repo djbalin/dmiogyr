@@ -265,7 +265,7 @@ export function Forecast({
               hvor de er enige.
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <LocationPicker value={location} onChange={changeLocation} />
             <button
               type="button"
