@@ -197,3 +197,70 @@ body {
   --icon-snow: #bfdbfe;
   --icon-bolt: #fbbf24;
 }
+
+/* Loading placeholders: a soft highlight sweeping across the block, rather
+   than the whole block blinking. Also used as an overlay on the chart
+   skeleton, where it sweeps across the placeholder lines. */
+.skeleton {
+  background-color: var(--line);
+  background-image: linear-gradient(
+    100deg,
+    transparent 20%,
+    color-mix(in oklab, var(--surface) 55%, transparent) 50%,
+    transparent 80%
+  );
+  background-size: 200% 100%;
+  background-repeat: no-repeat;
+  animation: skeleton-sweep 1.6s ease-in-out infinite;
+}
+
+.skeleton-sweep {
+  background-image: linear-gradient(
+    100deg,
+    transparent 20%,
+    color-mix(in oklab, var(--surface) 70%, transparent) 50%,
+    transparent 80%
+  );
+  background-size: 200% 100%;
+  background-repeat: no-repeat;
+  animation: skeleton-sweep 1.6s ease-in-out infinite;
+}
+
+@keyframes skeleton-sweep {
+  from {
+    background-position: 150% 0;
+  }
+  to {
+    background-position: -50% 0;
+  }
+}
+
+/* The chart skeleton's placeholder lines draw themselves in, left to right,
+   over and over — a hint of the shape that is on its way. */
+.skeleton-draw {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: skeleton-draw 2.4s ease-in-out infinite;
+}
+
+@keyframes skeleton-draw {
+  0% {
+    stroke-dashoffset: 1;
+    opacity: 1;
+  }
+  70% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* The animation is cut short above; show the lines whole instead. */
+  .skeleton-draw {
+    stroke-dashoffset: 0;
+  }
+}

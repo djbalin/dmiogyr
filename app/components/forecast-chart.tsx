@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Area,
   Bar,
@@ -36,14 +36,22 @@ import {
   PROVIDERS,
   type ProviderId,
 } from "@/lib/weather/types";
-import { PROVIDER_STYLES } from "./ui";
+import { PROVIDER_STYLES, RefreshIcon, Skeleton } from "./ui";
 import { WeatherIcon } from "./weather-icon";
 
 const MS_PER_HOUR = 3_600_000;
 /** How far ahead the graph reaches — Yr's own horizon, the longer of the two. */
 const HORIZON_DAYS = 9;
-/** How often a weather icon sits above the chart. */
-const ICON_STEP_HOURS = 6;
+/** How often a weather icon (and an hour label) can sit above the chart —
+ * the finest step that leaves each icon room to breathe at the current
+ * width wins. */
+const ICON_STEPS_HOURS = [6, 12, 24] as const;
+/** Horizontal room one icon needs, in px. */
+const MIN_ICON_SPACING = 26;
+/** Horizontal room a day label ("Ons 30.") needs, in px. */
+const MIN_DAY_LABEL_WIDTH = 52;
+/** Horizontal padding of the card (p-5, both sides). */
+const CARD_PADDING_X = 40;
 const CHART_MARGIN = { top: 8, right: 12, bottom: 0, left: 8 };
 const Y_AXIS_WIDTH = 34;
 /** Left/right inset of the chart's own plot area, so the icon and day-header
@@ -83,12 +91,28 @@ export function ForecastChart({
   now,
   loading,
   location,
+  actions,
 }: {
   forecasts: Partial<Record<ProviderId, ForecastResponse>>;
   now: Date;
   loading: boolean;
   location: Location;
+  /** Extra controls for the header, before the source toggles. */
+  actions?: React.ReactNode;
 }) {
+  const sectionRef = useRef<HTMLElement>(null);
+  const width = useElementWidth(sectionRef);
+  const plotWidth = width - CARD_PADDING_X - PLOT_INSET.left - PLOT_INSET.right;
+  // Before the first measurement (and on the server), assume the widest
+  // layout rather than flashing the sparsest one.
+  const iconStep =
+    width === 0
+      ? ICON_STEPS_HOURS[0]
+      : (ICON_STEPS_HOURS.find(
+          (step) =>
+            plotWidth / ((HORIZON_DAYS * 24) / step) >= MIN_ICON_SPACING,
+        ) ?? ICON_STEPS_HOURS[ICON_STEPS_HOURS.length - 1]);
+
   const [visible, setVisible] = useState<Record<ProviderId, boolean>>({
     dmi: true,
     yr: true,
@@ -145,27 +169,32 @@ export function ForecastChart({
     }
     for (const t of dayTicks)
       headers.push({ time: t, day: zonedDayKey(new Date(t)) });
-    return headers.map(({ time, day }) => ({
-      time,
-      // Full-length day names ("Torsdag · 27. aug.") only fit DMI's own
-      // ~2-day-wide graph; at this 9-day zoom each day gets under 110px, so
-      // "today" stays as a full label (nothing crowds its left edge) and
-      // every other day is abbreviated to weekday + date.
-      label:
-        day === today
-          ? relativeDayLabel(day, today)
-          : `${danishWeekday(day).slice(0, 3)} ${Number(day.split("-")[2])}.`,
-    }));
-  }, [domain.start, dayTicks, now]);
+    // On a narrow screen a day is too thin for its label; name every other
+    // one instead of letting them overlap.
+    const thin =
+      plotWidth > 0 && plotWidth / HORIZON_DAYS < MIN_DAY_LABEL_WIDTH;
+    return headers
+      .filter((_, index) => !thin || index % 2 === 0)
+      .map(({ time, day }) => ({
+        time,
+        // Full-length day names ("Torsdag · 27. aug.") only fit DMI's own
+        // ~2-day-wide graph; at this 9-day zoom each day gets under 110px, so
+        // "today" stays as a full label (nothing crowds its left edge) and
+        // every other day is abbreviated to weekday + date.
+        label:
+          day === today
+            ? relativeDayLabel(day, today)
+            : `${danishWeekday(day).slice(0, 3)} ${Number(day.split("-")[2])}.`,
+      }));
+  }, [domain.start, dayTicks, now, plotWidth]);
 
-  /** Every `ICON_STEP_HOURS` from the first such boundary in range, aligned to
+  /** Every `iconStep` hours from the first such boundary in range, aligned to
    * the clock (00/06/12/18) rather than offset from "now" — both the icon row
    * and the hour labels below the chart hang off this same grid. */
-  const sixHourTicks = useMemo(() => {
+  const stepTicks = useMemo(() => {
     const firstDay = zonedDayKey(new Date(domain.start));
     const startHour = zonedHour(new Date(domain.start));
-    const alignedHour =
-      Math.ceil(startHour / ICON_STEP_HOURS) * ICON_STEP_HOURS;
+    const alignedHour = Math.ceil(startHour / iconStep) * iconStep;
     let day = firstDay;
     let hour = alignedHour;
     if (hour >= 24) {
@@ -177,22 +206,22 @@ export function ForecastChart({
     const ticks: number[] = [];
     while (t <= domain.end) {
       ticks.push(t);
-      t += ICON_STEP_HOURS * MS_PER_HOUR;
+      t += iconStep * MS_PER_HOUR;
     }
     return ticks;
-  }, [domain]);
+  }, [domain, iconStep]);
 
   const iconTicks = useMemo(() => {
     if (!primary) return [];
     const hours = forecasts[primary]?.hours ?? [];
     if (hours.length === 0) return [];
-    return sixHourTicks
+    return stepTicks
       .map((time) => ({ time, hour: nearestHour(hours, time) }))
       .filter(
         (tick): tick is { time: number; hour: HourlyForecast } =>
           tick.hour !== null,
       );
-  }, [primary, forecasts, sixHourTicks]);
+  }, [primary, forecasts, stepTicks]);
 
   const toggle = (provider: ProviderId) =>
     setVisible((previous) => ({
@@ -200,19 +229,33 @@ export function ForecastChart({
       [provider]: !previous[provider],
     }));
 
+  const anyData = hasData.dmi || hasData.yr;
   const empty =
     !loading && !((visible.dmi && hasData.dmi) || (visible.yr && hasData.yr));
+  // First load shows a skeleton; a refresh (or a new town) keeps the current
+  // graph on screen, dimmed, until the new numbers arrive.
+  const firstLoad = loading && !anyData;
+  const refreshing = loading && anyData;
 
   return (
     <section
+      ref={sectionRef}
       aria-label="Temperatur- og nedbørsgraf"
+      aria-busy={loading}
       className="rounded-2xl border border-line bg-surface p-5 shadow-[var(--shadow)]"
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint">
+        <h2 className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-ink-faint">
           Graf, {HORIZON_DAYS} døgn
+          {refreshing && (
+            <span className="inline-flex items-center gap-1 font-medium normal-case tracking-normal text-accent">
+              <RefreshIcon spinning />
+              Opdaterer…
+            </span>
+          )}
         </h2>
         <div className="flex items-center gap-2">
+          {actions}
           {PROVIDER_IDS.map((provider) => (
             <SourceToggle
               key={provider}
@@ -225,14 +268,20 @@ export function ForecastChart({
         </div>
       </div>
 
-      {empty ? (
+      {firstLoad ? (
+        <ChartSkeleton />
+      ) : empty ? (
         <p className="mt-6 py-10 text-center text-sm text-ink-faint">
           {!visible.dmi && !visible.yr
             ? "Vælg mindst én kilde for at se grafen."
             : "Ingen data at vise."}
         </p>
       ) : (
-        <div className="mt-4">
+        <div
+          className={`mt-4 transition-opacity duration-300 ${
+            refreshing ? "pointer-events-none opacity-50" : ""
+          }`}
+        >
           <PlotRow height={20}>
             {dayHeaders.map(({ time, label }) => (
               <span
@@ -400,7 +449,7 @@ export function ForecastChart({
           </ResponsiveContainer>
 
           <PlotRow height={16}>
-            {sixHourTicks.map((t) => (
+            {stepTicks.map((t) => (
               <span
                 key={t}
                 className="numeric absolute top-0 -translate-x-1/2 text-[10px] text-ink-faint"
@@ -419,6 +468,157 @@ export function ForecastChart({
       </p>
     </section>
   );
+}
+
+/** Deterministic placeholder temperature curve: a daily swing with a slow
+ * drift, sampled into an SVG path across a 0–1000 × 0–170 box. */
+function skeletonCurve(phase: number, offset: number): string {
+  const points: string[] = [];
+  for (let i = 0; i <= 90; i++) {
+    const x = (i / 90) * 1000;
+    const y =
+      85 +
+      offset +
+      Math.sin((i / 10) * Math.PI * 2 + phase) * 28 +
+      Math.sin(i / 23 + phase) * 12;
+    points.push(`${i === 0 ? "M" : "L"}${x.toFixed(1)} ${y.toFixed(1)}`);
+  }
+  return points.join(" ");
+}
+
+const SKELETON_CURVES = {
+  dmi: skeletonCurve(0, 0),
+  yr: skeletonCurve(0.35, -6),
+};
+
+/** Deterministic bar heights for the precipitation placeholder. */
+const SKELETON_BARS = Array.from({ length: 54 }, (_, i) => {
+  const wave = Math.max(0, Math.sin(i / 4.5) + Math.sin(i / 1.7) * 0.4);
+  return Math.round(8 + wave * 40);
+});
+
+/**
+ * What the graph looks like while the first forecast is on its way: the same
+ * rows at the same heights — day labels, icons, a temperature panel whose two
+ * provider-coloured lines keep drawing themselves in, and a row of
+ * precipitation bars — under a soft sweep, so the page does not jump when the
+ * real chart replaces it.
+ */
+function ChartSkeleton() {
+  return (
+    <div className="relative mt-4" aria-live="polite">
+      <span className="sr-only">Henter grafen…</span>
+      <PlotRow height={20}>
+        <div className="flex h-full items-start justify-between">
+          {Array.from({ length: 9 }, (_, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: static placeholders
+            <Skeleton key={i} className="h-3.5 w-11" />
+          ))}
+        </div>
+      </PlotRow>
+      <PlotRow height={26}>
+        <div className="flex h-full items-start justify-between">
+          {Array.from({ length: 18 }, (_, i) => (
+            <div
+              // biome-ignore lint/suspicious/noArrayIndexKey: static placeholders
+              key={i}
+              className="skeleton h-5 w-5 rounded-full opacity-70"
+            />
+          ))}
+        </div>
+      </PlotRow>
+
+      <div
+        style={{
+          height: 170,
+          paddingLeft: PLOT_INSET.left,
+          paddingRight: PLOT_INSET.right,
+          paddingTop: CHART_MARGIN.top,
+        }}
+      >
+        <svg
+          viewBox="0 0 1000 170"
+          preserveAspectRatio="none"
+          className="h-full w-full overflow-visible"
+          aria-hidden="true"
+        >
+          {[30, 70, 110, 150].map((y) => (
+            <line
+              key={y}
+              x1="0"
+              x2="1000"
+              y1={y}
+              y2={y}
+              stroke="var(--color-line)"
+              vectorEffect="non-scaling-stroke"
+            />
+          ))}
+          {(["yr", "dmi"] as const).map((provider, index) => (
+            <path
+              key={provider}
+              d={SKELETON_CURVES[provider]}
+              pathLength={1}
+              fill="none"
+              stroke={PROVIDER_COLOR_VAR[provider]}
+              strokeOpacity={0.35}
+              strokeWidth={2.25}
+              strokeLinecap="round"
+              vectorEffect="non-scaling-stroke"
+              className="skeleton-draw"
+              style={{ animationDelay: `${index * 180}ms` }}
+            />
+          ))}
+        </svg>
+      </div>
+
+      <div
+        className="flex items-end gap-[3px]"
+        style={{
+          height: 90,
+          paddingLeft: PLOT_INSET.left,
+          paddingRight: PLOT_INSET.right,
+          paddingTop: CHART_MARGIN.top,
+        }}
+      >
+        {SKELETON_BARS.map((height, i) => (
+          <div
+            // biome-ignore lint/suspicious/noArrayIndexKey: static placeholders
+            key={i}
+            className="flex-1 rounded-t-sm bg-line"
+            style={{ height: `${height}%` }}
+          />
+        ))}
+      </div>
+      <PlotRow height={16}>{null}</PlotRow>
+
+      {/* The sweep runs over the lines and bars alike. */}
+      <div
+        className="skeleton-sweep pointer-events-none absolute inset-0"
+        aria-hidden="true"
+      />
+      <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+        <span className="inline-flex items-center gap-2 rounded-full border border-line bg-surface-raised px-3.5 py-1.5 text-xs font-medium text-ink-muted shadow-[var(--shadow)]">
+          <RefreshIcon spinning />
+          Henter vejrudsigter…
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/** An element's rendered width, kept current as it resizes; 0 before mount. */
+function useElementWidth(ref: React.RefObject<HTMLElement | null>): number {
+  const [width, setWidth] = useState(0);
+  useEffect(() => {
+    const element = ref.current;
+    if (!element) return;
+    const observer = new ResizeObserver(([entry]) =>
+      setWidth(entry.contentRect.width + CARD_PADDING_X),
+    );
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [ref]);
+  return width;
 }
 
 /** A full-width row inset to line up with the chart's plot area beneath it. */

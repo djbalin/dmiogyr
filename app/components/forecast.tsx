@@ -20,6 +20,7 @@ import { SettingsMenu } from "./settings-menu";
 import { PROVIDER_STYLES, RefreshIcon, Skeleton, WarningIcon } from "./ui";
 
 const STORAGE_KEY = "dmiogyr:location";
+const NOW_HIDDEN_KEY = "dmiogyr:now-hidden";
 
 /*
  * localStorage throws outright when a browser is set to block site data, so
@@ -37,6 +38,23 @@ function readStoredLocation(): string | null {
 function storeLocation(id: string): void {
   try {
     window.localStorage.setItem(STORAGE_KEY, id);
+  } catch {
+    // Ignored on purpose.
+  }
+}
+
+function readNowHidden(): boolean {
+  try {
+    return window.localStorage.getItem(NOW_HIDDEN_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function storeNowHidden(hidden: boolean): void {
+  try {
+    if (hidden) window.localStorage.setItem(NOW_HIDDEN_KEY, "1");
+    else window.localStorage.removeItem(NOW_HIDDEN_KEY);
   } catch {
     // Ignored on purpose.
   }
@@ -94,6 +112,15 @@ export function Forecast({
   // `now` only exists once the browser has it, so the server-rendered HTML and
   // the first client render agree and React does not report a mismatch.
   const [now, setNow] = useState<Date | null>(null);
+  // Read after mount, like the stored town: the server cannot see it.
+  const [nowHidden, setNowHidden] = useState(false);
+
+  useEffect(() => setNowHidden(readNowHidden()), []);
+
+  const toggleNowHidden = (hidden: boolean) => {
+    setNowHidden(hidden);
+    storeNowHidden(hidden);
+  };
 
   useEffect(() => {
     setNow(new Date());
@@ -269,19 +296,42 @@ export function Forecast({
       </header>
 
       <div className="space-y-4">
-        <NowPanel
-          forecasts={forecasts}
-          sun={days[0]?.sun ?? null}
-          now={now ?? new Date()}
-          loading={anyLoading}
-        />
-
-        <ForecastChart
-          forecasts={forecasts}
-          now={now ?? new Date()}
-          loading={anyLoading}
-          location={location}
-        />
+        <div
+          className={
+            nowHidden
+              ? ""
+              : "grid gap-4 lg:grid-cols-[minmax(0,1fr)_15rem] lg:items-stretch"
+          }
+        >
+          <ForecastChart
+            forecasts={forecasts}
+            now={now ?? new Date()}
+            loading={anyLoading}
+            location={location}
+            actions={
+              nowHidden && (
+                <button
+                  type="button"
+                  onClick={() => toggleNowHidden(false)}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-3 py-1.5 text-xs font-medium text-ink-muted transition-colors hover:border-line-strong hover:text-ink"
+                >
+                  Vis lige nu
+                </button>
+              )
+            }
+          />
+          {!nowHidden && (
+            <NowPanel
+              forecasts={forecasts}
+              sun={days[0]?.sun ?? null}
+              now={now ?? new Date()}
+              loading={anyLoading}
+              onHide={() => toggleNowHidden(true)}
+              // Above the graph on a phone, beside it once there is room.
+              className="order-first lg:order-none"
+            />
+          )}
+        </div>
 
         <DmiExtrasTop extras={extras} loading={extrasLoading} />
 
@@ -294,7 +344,10 @@ export function Forecast({
         ) : (
           <section
             aria-label="Udsigt dag for dag"
-            className="overflow-hidden rounded-2xl border border-line bg-surface shadow-[var(--shadow)]"
+            aria-busy={anyLoading}
+            className={`overflow-hidden rounded-2xl border border-line bg-surface shadow-[var(--shadow)] transition-opacity duration-300 ${
+              anyLoading ? "opacity-60" : ""
+            }`}
           >
             <DayListHeader />
             {days.map((day) => (
@@ -418,17 +471,42 @@ function ProviderStatus({
   );
 }
 
+/** Placeholder rows shaped like the day table: a heading, then a DMI and a
+ * Yr line of period icons and temperatures. */
 function DayListSkeleton() {
   return (
-    <div className="overflow-hidden rounded-2xl border border-line bg-surface shadow-[var(--shadow)]">
+    <div
+      className="overflow-hidden rounded-2xl border border-line bg-surface shadow-[var(--shadow)]"
+      aria-live="polite"
+    >
+      <span className="sr-only">Henter udsigten dag for dag…</span>
       {["a", "b", "c", "d", "e"].map((key) => (
         <div
           key={key}
-          className="flex items-center gap-4 border-t border-line px-4 py-5 first:border-t-0"
+          className="flex items-center gap-4 border-t border-line px-4 py-4 first:border-t-0"
         >
-          <Skeleton className="h-10 w-28" />
-          <Skeleton className="h-8 flex-1" />
-          <Skeleton className="h-8 w-20" />
+          <div className="w-28 shrink-0 space-y-2 sm:w-40">
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-3 w-2/3" />
+          </div>
+          <div className="flex-1 space-y-2.5">
+            {PROVIDER_IDS.map((provider) => (
+              <div key={provider} className="flex items-center gap-3">
+                <span
+                  className={`h-2 w-2 shrink-0 rounded-full opacity-40 ${PROVIDER_STYLES[provider].dot}`}
+                />
+                <div className="flex flex-1 gap-3">
+                  {[0, 1, 2, 3].map((i) => (
+                    <div
+                      key={i}
+                      className="skeleton h-6 w-6 shrink-0 rounded-full"
+                    />
+                  ))}
+                </div>
+                <Skeleton className="h-4 w-14" />
+              </div>
+            ))}
+          </div>
         </div>
       ))}
     </div>

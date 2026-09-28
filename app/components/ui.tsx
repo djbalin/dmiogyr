@@ -167,7 +167,9 @@ export function WindArrow({
 export function Skeleton({ className = "" }: { className?: string }) {
   return (
     <div
-      className={`animate-pulse rounded-md bg-line ${className}`}
+      // Default to a gentle rounding, unless the caller asks for its own:
+      // two rounded-* utilities on one element would fight over the corner.
+      className={`skeleton ${className.includes("rounded-") ? "" : "rounded-md"} ${className}`}
       aria-hidden="true"
     />
   );
