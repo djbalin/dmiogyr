@@ -37,7 +37,7 @@ import { WeatherIcon } from "./weather-icon";
  * declared once here and reused by the headers, so a header can never drift
  * out of alignment with the rows underneath it.
  */
-const DAY_LEAD = "w-[210px] shrink-0";
+const DAY_LEAD = "w-[14.5rem] shrink-0";
 const DAY_ROW_COLUMNS =
   "grid grid-cols-[40px_repeat(4,minmax(0,1fr))_104px_88px_96px] items-center gap-3";
 
@@ -61,7 +61,7 @@ export type DayData = {
 
 export function DayListHeader() {
   return (
-    <div className="hidden items-end gap-3 border-b border-line bg-surface-muted px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-ink-faint lg:flex">
+    <div className="hidden items-end gap-3 border-b border-line bg-surface-muted px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-ink-faint lg:flex">
       <div className={DAY_LEAD}>Dag</div>
       <div className={`flex-1 ${DAY_ROW_COLUMNS}`}>
         <div />
@@ -125,7 +125,7 @@ function DesktopProviderRow({
   return (
     <div className={DAY_ROW_COLUMNS}>
       <ProviderTag provider={provider} />
-      <PeriodIcons summary={summary} size={30} />
+      <PeriodIcons summary={summary} size={32} />
       <div className={`numeric text-center ${styles.text}`}>
         <span className="text-lg font-semibold">
           {Math.round(summary.maxTemperature)}°
@@ -234,7 +234,7 @@ export function DayCard({
                 return (
                   <div
                     key={provider}
-                    className="grid grid-cols-[36px_repeat(4,minmax(0,1fr))_62px] items-center gap-1"
+                    className="grid grid-cols-[2.25rem_repeat(4,minmax(0,1fr))_4.25rem] items-center gap-1"
                   >
                     <ProviderTag provider={provider} />
                     <PeriodIcons summary={summary} size={26} />
@@ -303,13 +303,12 @@ function UvBadge({ uv }: { uv: number }) {
   const color = uvColor(uv);
   return (
     <span
-      className="inline-flex items-center gap-1 text-[10px] font-semibold text-ink-faint"
+      className="inline-flex items-center gap-1 text-[0.6875rem] font-semibold text-ink-faint"
       title={`UV-indeks ${uv.toFixed(1)}`}
     >
-      <SunIcon />
       UV
       <span
-        className="numeric inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 text-[10px] font-bold leading-none"
+        className="numeric inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 text-[0.6875rem] font-bold leading-none"
         style={{ borderColor: color, color }}
       >
         {Math.round(uv)}
@@ -328,7 +327,7 @@ function SpreadBadge({
 }) {
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-full bg-warn-soft px-2 py-0.5 text-[11px] font-semibold text-warn ${className}`}
+      className={`inline-flex items-center gap-1 rounded-full bg-warn-soft px-2 py-0.5 text-xs font-semibold text-warn ${className}`}
       title="Største forskel mellem DMI's og Yr's temperaturer denne dag"
     >
       Uenige · {Math.round(spread)}°
@@ -359,15 +358,15 @@ function HourTable({
 
   return (
     <div className="border-t border-line bg-surface-muted/60">
-      <div className="border-b border-line px-4 py-2 text-[10px] font-semibold uppercase tracking-wide text-ink-faint sm:text-[11px] sm:tracking-wider">
+      <div className="border-b border-line px-4 py-2 text-[0.6875rem] font-semibold uppercase tracking-wide text-ink-faint sm:text-xs sm:tracking-wider">
         <div className={HOUR_ROW_COLUMNS}>
           <div>Tid</div>
           <HeaderCell label="Vejr" />
           <HeaderCell label="Temp." />
           <HeaderCell label="Nedbør" unit="mm" />
           <HeaderCell label="Vind" unit="m/s" />
-          <HeaderCell label="Skyer" unit="%" className={WIDE_ONLY} />
-          <HeaderCell label="Luftfugt." unit="%" className={WIDE_ONLY} />
+          <HeaderCell label="Skydække" className={WIDE_ONLY} />
+          <HeaderCell label="Luftfugt." className={WIDE_ONLY} />
         </div>
       </div>
 
@@ -418,7 +417,7 @@ function HeaderCell({
         <ProviderTag
           key={provider}
           provider={provider}
-          className="text-[9px]"
+          className="text-[0.6875rem]"
         />
       ))}
     </div>
@@ -446,7 +445,7 @@ function PairCell({
         return (
           <div
             key={provider}
-            className={`numeric flex min-w-0 items-center justify-center gap-0.5 text-xs sm:text-sm ${PROVIDER_STYLES[provider].text}`}
+            className={`numeric flex min-w-0 items-center justify-center gap-1 text-sm sm:text-base ${PROVIDER_STYLES[provider].text}`}
           >
             {entry ? (
               render(entry, provider)
@@ -477,16 +476,16 @@ function HourRow({
 
   return (
     <div
-      className={`border-b border-line/70 px-4 py-1.5 last:border-b-0 ${
+      className={`border-b border-line/70 px-4 py-2 last:border-b-0 ${
         highlighted ? "bg-surface ring-1 ring-inset ring-accent/40" : ""
       }`}
     >
       <div className={HOUR_ROW_COLUMNS}>
-        <div className="numeric text-sm font-medium text-ink-muted">
+        <div className="numeric text-sm font-medium text-ink-muted sm:text-base">
           {formatHour(hour)}
           <span className="hidden sm:inline">:00</span>
           {highlighted && (
-            <span className="ml-1 text-[10px] font-semibold uppercase text-accent">
+            <span className="ml-1 text-[0.6875rem] font-semibold uppercase text-accent">
               nu
             </span>
           )}
@@ -500,7 +499,7 @@ function HourRow({
                 <WeatherIcon
                   condition={condition}
                   night={night}
-                  size={22}
+                  size={28}
                   decorative
                 />
               </span>
@@ -529,7 +528,7 @@ function HourRow({
           slot={slot}
           render={(entry) => (
             <>
-              <WindArrow degrees={entry.windDirection} size={12} />
+              <WindArrow degrees={entry.windDirection} size={14} />
               {Math.round(entry.windSpeed)}
             </>
           )}
@@ -537,12 +536,12 @@ function HourRow({
         <PairCell
           slot={slot}
           className={WIDE_ONLY}
-          render={(entry) => Math.round(entry.cloudCover)}
+          render={(entry) => `${Math.round(entry.cloudCover)}%`}
         />
         <PairCell
           slot={slot}
           className={WIDE_ONLY}
-          render={(entry) => Math.round(entry.humidity)}
+          render={(entry) => `${Math.round(entry.humidity)}%`}
         />
       </div>
     </div>

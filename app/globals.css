@@ -113,6 +113,17 @@
 
 html {
   color-scheme: light dark;
+  /* A size up from the browser's 16px default (and still relative to it, so
+     a reader's own font-size setting is respected). Every Tailwind size is
+     in rem, so the whole app scales with this one value. Phones get a
+     smaller step: their columns have no width to spare. */
+  font-size: 106.25%;
+}
+
+@media (min-width: 40rem) {
+  html {
+    font-size: 112.5%;
+  }
 }
 
 html[data-theme="light"] {

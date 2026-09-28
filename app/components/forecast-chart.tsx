@@ -49,7 +49,7 @@ const ICON_STEPS_HOURS = [6, 12, 24] as const;
 /** Horizontal room one icon needs, in px. */
 const MIN_ICON_SPACING = 26;
 /** Horizontal room a day label ("Ons 30.") needs, in px. */
-const MIN_DAY_LABEL_WIDTH = 52;
+const MIN_DAY_LABEL_WIDTH = 60;
 /** Horizontal padding of the card (p-5, both sides). */
 const CARD_PADDING_X = 40;
 const CHART_MARGIN = { top: 8, right: 12, bottom: 0, left: 8 };
@@ -169,12 +169,17 @@ export function ForecastChart({
     }
     for (const t of dayTicks)
       headers.push({ time: t, day: zonedDayKey(new Date(t)) });
-    // On a narrow screen a day is too thin for its label; name every other
-    // one instead of letting them overlap.
-    const thin =
-      plotWidth > 0 && plotWidth / HORIZON_DAYS < MIN_DAY_LABEL_WIDTH;
+    // On a narrow screen a day is too thin for its label; name every second
+    // (or third) one instead of letting them overlap.
+    const stride =
+      plotWidth > 0
+        ? Math.max(
+            1,
+            Math.ceil(MIN_DAY_LABEL_WIDTH / (plotWidth / HORIZON_DAYS)),
+          )
+        : 1;
     return headers
-      .filter((_, index) => !thin || index % 2 === 0)
+      .filter((_, index) => index % stride === 0)
       .map(({ time, day }) => ({
         time,
         // Full-length day names ("Torsdag · 27. aug.") only fit DMI's own
@@ -245,7 +250,7 @@ export function ForecastChart({
       className="rounded-2xl border border-line bg-surface p-5 shadow-[var(--shadow)]"
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-ink-faint">
+        <h2 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-ink-faint">
           Graf, {HORIZON_DAYS} døgn
           {refreshing && (
             <span className="inline-flex items-center gap-1 font-medium normal-case tracking-normal text-accent">
@@ -286,7 +291,7 @@ export function ForecastChart({
             {dayHeaders.map(({ time, label }) => (
               <span
                 key={time}
-                className="absolute top-0 whitespace-nowrap text-[13px] font-semibold text-ink"
+                className="absolute top-0 whitespace-nowrap text-sm font-semibold text-ink"
                 style={{ left: xPercent(time, domain) }}
               >
                 {label}
@@ -369,7 +374,7 @@ export function ForecastChart({
               <YAxis
                 width={Y_AXIS_WIDTH}
                 tickFormatter={(v: number) => `${Math.round(v)}°`}
-                tick={{ fill: "var(--color-ink-faint)", fontSize: 10 }}
+                tick={{ fill: "var(--color-ink-faint)", fontSize: 11 }}
                 axisLine={false}
                 tickLine={false}
               />
@@ -420,7 +425,7 @@ export function ForecastChart({
               />
               <YAxis
                 width={Y_AXIS_WIDTH}
-                tick={{ fill: "var(--color-ink-faint)", fontSize: 10 }}
+                tick={{ fill: "var(--color-ink-faint)", fontSize: 11 }}
                 axisLine={false}
                 tickLine={false}
                 tickFormatter={(v: number) => `${v}`}
@@ -452,7 +457,7 @@ export function ForecastChart({
             {stepTicks.map((t) => (
               <span
                 key={t}
-                className="numeric absolute top-0 -translate-x-1/2 text-[10px] text-ink-faint"
+                className="numeric absolute top-0 -translate-x-1/2 text-[0.6875rem] text-ink-faint"
                 style={{ left: xPercent(t, domain) }}
               >
                 {formatClock(new Date(t)).slice(0, 2)}
