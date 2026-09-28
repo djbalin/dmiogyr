@@ -305,7 +305,10 @@ export function Forecast({
         ) : (
           <section
             aria-label="Udsigt dag for dag"
-            className="overflow-hidden rounded-2xl border border-line bg-surface shadow-[var(--shadow)]"
+            aria-busy={anyLoading}
+            className={`overflow-hidden rounded-2xl border border-line bg-surface shadow-[var(--shadow)] transition-opacity duration-300 ${
+              anyLoading ? "opacity-60" : ""
+            }`}
           >
             <DayListHeader />
             {days.map((day) => (
@@ -431,17 +434,42 @@ function ProviderStatus({
   );
 }
 
+/** Placeholder rows shaped like the day table: a heading, then a DMI and a
+ * Yr line of period icons and temperatures. */
 function DayListSkeleton() {
   return (
-    <div className="overflow-hidden rounded-2xl border border-line bg-surface shadow-[var(--shadow)]">
+    <div
+      className="overflow-hidden rounded-2xl border border-line bg-surface shadow-[var(--shadow)]"
+      aria-live="polite"
+    >
+      <span className="sr-only">Henter udsigten dag for dag…</span>
       {["a", "b", "c", "d", "e"].map((key) => (
         <div
           key={key}
-          className="flex items-center gap-4 border-t border-line px-4 py-5 first:border-t-0"
+          className="flex items-center gap-4 border-t border-line px-4 py-4 first:border-t-0"
         >
-          <Skeleton className="h-10 w-28" />
-          <Skeleton className="h-8 flex-1" />
-          <Skeleton className="h-8 w-20" />
+          <div className="w-28 shrink-0 space-y-2 sm:w-40">
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-3 w-2/3" />
+          </div>
+          <div className="flex-1 space-y-2.5">
+            {PROVIDER_IDS.map((provider) => (
+              <div key={provider} className="flex items-center gap-3">
+                <span
+                  className={`h-2 w-2 shrink-0 rounded-full opacity-40 ${PROVIDER_STYLES[provider].dot}`}
+                />
+                <div className="flex flex-1 gap-3">
+                  {[0, 1, 2, 3].map((i) => (
+                    <div
+                      key={i}
+                      className="skeleton h-6 w-6 shrink-0 rounded-full"
+                    />
+                  ))}
+                </div>
+                <Skeleton className="h-4 w-14" />
+              </div>
+            ))}
+          </div>
         </div>
       ))}
     </div>

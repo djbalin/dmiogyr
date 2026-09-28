@@ -36,7 +36,7 @@ import {
   PROVIDERS,
   type ProviderId,
 } from "@/lib/weather/types";
-import { PROVIDER_STYLES } from "./ui";
+import { PROVIDER_STYLES, RefreshIcon, Skeleton } from "./ui";
 import { WeatherIcon } from "./weather-icon";
 
 const MS_PER_HOUR = 3_600_000;
@@ -200,17 +200,29 @@ export function ForecastChart({
       [provider]: !previous[provider],
     }));
 
+  const anyData = hasData.dmi || hasData.yr;
   const empty =
     !loading && !((visible.dmi && hasData.dmi) || (visible.yr && hasData.yr));
+  // First load shows a skeleton; a refresh (or a new town) keeps the current
+  // graph on screen, dimmed, until the new numbers arrive.
+  const firstLoad = loading && !anyData;
+  const refreshing = loading && anyData;
 
   return (
     <section
       aria-label="Temperatur- og nedbørsgraf"
+      aria-busy={loading}
       className="rounded-2xl border border-line bg-surface p-5 shadow-[var(--shadow)]"
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint">
+        <h2 className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-ink-faint">
           Graf, {HORIZON_DAYS} døgn
+          {refreshing && (
+            <span className="inline-flex items-center gap-1 font-medium normal-case tracking-normal text-accent">
+              <RefreshIcon spinning />
+              Opdaterer…
+            </span>
+          )}
         </h2>
         <div className="flex items-center gap-2">
           {PROVIDER_IDS.map((provider) => (
@@ -225,14 +237,20 @@ export function ForecastChart({
         </div>
       </div>
 
-      {empty ? (
+      {firstLoad ? (
+        <ChartSkeleton />
+      ) : empty ? (
         <p className="mt-6 py-10 text-center text-sm text-ink-faint">
           {!visible.dmi && !visible.yr
             ? "Vælg mindst én kilde for at se grafen."
             : "Ingen data at vise."}
         </p>
       ) : (
-        <div className="mt-4">
+        <div
+          className={`mt-4 transition-opacity duration-300 ${
+            refreshing ? "pointer-events-none opacity-50" : ""
+          }`}
+        >
           <PlotRow height={20}>
             {dayHeaders.map(({ time, label }) => (
               <span
@@ -418,6 +436,142 @@ export function ForecastChart({
         tal.
       </p>
     </section>
+  );
+}
+
+/** Deterministic placeholder temperature curve: a daily swing with a slow
+ * drift, sampled into an SVG path across a 0–1000 × 0–170 box. */
+function skeletonCurve(phase: number, offset: number): string {
+  const points: string[] = [];
+  for (let i = 0; i <= 90; i++) {
+    const x = (i / 90) * 1000;
+    const y =
+      85 +
+      offset +
+      Math.sin((i / 10) * Math.PI * 2 + phase) * 28 +
+      Math.sin(i / 23 + phase) * 12;
+    points.push(`${i === 0 ? "M" : "L"}${x.toFixed(1)} ${y.toFixed(1)}`);
+  }
+  return points.join(" ");
+}
+
+const SKELETON_CURVES = {
+  dmi: skeletonCurve(0, 0),
+  yr: skeletonCurve(0.35, -6),
+};
+
+/** Deterministic bar heights for the precipitation placeholder. */
+const SKELETON_BARS = Array.from({ length: 54 }, (_, i) => {
+  const wave = Math.max(0, Math.sin(i / 4.5) + Math.sin(i / 1.7) * 0.4);
+  return Math.round(8 + wave * 40);
+});
+
+/**
+ * What the graph looks like while the first forecast is on its way: the same
+ * rows at the same heights — day labels, icons, a temperature panel whose two
+ * provider-coloured lines keep drawing themselves in, and a row of
+ * precipitation bars — under a soft sweep, so the page does not jump when the
+ * real chart replaces it.
+ */
+function ChartSkeleton() {
+  return (
+    <div className="relative mt-4" aria-live="polite">
+      <span className="sr-only">Henter grafen…</span>
+      <PlotRow height={20}>
+        <div className="flex h-full items-start justify-between">
+          {Array.from({ length: 9 }, (_, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: static placeholders
+            <Skeleton key={i} className="h-3.5 w-11" />
+          ))}
+        </div>
+      </PlotRow>
+      <PlotRow height={26}>
+        <div className="flex h-full items-start justify-between">
+          {Array.from({ length: 18 }, (_, i) => (
+            <div
+              // biome-ignore lint/suspicious/noArrayIndexKey: static placeholders
+              key={i}
+              className="skeleton h-5 w-5 rounded-full opacity-70"
+            />
+          ))}
+        </div>
+      </PlotRow>
+
+      <div
+        style={{
+          height: 170,
+          paddingLeft: PLOT_INSET.left,
+          paddingRight: PLOT_INSET.right,
+          paddingTop: CHART_MARGIN.top,
+        }}
+      >
+        <svg
+          viewBox="0 0 1000 170"
+          preserveAspectRatio="none"
+          className="h-full w-full overflow-visible"
+          aria-hidden="true"
+        >
+          {[30, 70, 110, 150].map((y) => (
+            <line
+              key={y}
+              x1="0"
+              x2="1000"
+              y1={y}
+              y2={y}
+              stroke="var(--color-line)"
+              vectorEffect="non-scaling-stroke"
+            />
+          ))}
+          {(["yr", "dmi"] as const).map((provider, index) => (
+            <path
+              key={provider}
+              d={SKELETON_CURVES[provider]}
+              pathLength={1}
+              fill="none"
+              stroke={PROVIDER_COLOR_VAR[provider]}
+              strokeOpacity={0.35}
+              strokeWidth={2.25}
+              strokeLinecap="round"
+              vectorEffect="non-scaling-stroke"
+              className="skeleton-draw"
+              style={{ animationDelay: `${index * 180}ms` }}
+            />
+          ))}
+        </svg>
+      </div>
+
+      <div
+        className="flex items-end gap-[3px]"
+        style={{
+          height: 90,
+          paddingLeft: PLOT_INSET.left,
+          paddingRight: PLOT_INSET.right,
+          paddingTop: CHART_MARGIN.top,
+        }}
+      >
+        {SKELETON_BARS.map((height, i) => (
+          <div
+            // biome-ignore lint/suspicious/noArrayIndexKey: static placeholders
+            key={i}
+            className="flex-1 rounded-t-sm bg-line"
+            style={{ height: `${height}%` }}
+          />
+        ))}
+      </div>
+      <PlotRow height={16}>{null}</PlotRow>
+
+      {/* The sweep runs over the lines and bars alike. */}
+      <div
+        className="skeleton-sweep pointer-events-none absolute inset-0"
+        aria-hidden="true"
+      />
+      <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+        <span className="inline-flex items-center gap-2 rounded-full border border-line bg-surface-raised px-3.5 py-1.5 text-xs font-medium text-ink-muted shadow-[var(--shadow)]">
+          <RefreshIcon spinning />
+          Henter vejrudsigter…
+        </span>
+      </div>
+    </div>
   );
 }
 
