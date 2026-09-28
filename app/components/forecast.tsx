@@ -16,6 +16,7 @@ import { DmiExtrasBottom, DmiExtrasTop, useDmiExtras } from "./dmi-extras";
 import { ForecastChart } from "./forecast-chart";
 import { LocationPicker } from "./location-picker";
 import { NowPanel } from "./now-panel";
+import { SettingsMenu } from "./settings-menu";
 import { PROVIDER_STYLES, RefreshIcon, Skeleton, WarningIcon } from "./ui";
 
 const STORAGE_KEY = "dmiogyr:location";
@@ -275,6 +276,7 @@ export function Forecast({
               <RefreshIcon spinning={anyLoading} />
               Opdatér
             </button>
+            <SettingsMenu />
           </div>
         </div>
       </header>
