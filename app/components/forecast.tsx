@@ -19,6 +19,7 @@ import { NowPanel } from "./now-panel";
 import { PROVIDER_STYLES, RefreshIcon, Skeleton, WarningIcon } from "./ui";
 
 const STORAGE_KEY = "dmiogyr:location";
+const NOW_HIDDEN_KEY = "dmiogyr:now-hidden";
 
 /*
  * localStorage throws outright when a browser is set to block site data, so
@@ -36,6 +37,23 @@ function readStoredLocation(): string | null {
 function storeLocation(id: string): void {
   try {
     window.localStorage.setItem(STORAGE_KEY, id);
+  } catch {
+    // Ignored on purpose.
+  }
+}
+
+function readNowHidden(): boolean {
+  try {
+    return window.localStorage.getItem(NOW_HIDDEN_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function storeNowHidden(hidden: boolean): void {
+  try {
+    if (hidden) window.localStorage.setItem(NOW_HIDDEN_KEY, "1");
+    else window.localStorage.removeItem(NOW_HIDDEN_KEY);
   } catch {
     // Ignored on purpose.
   }
@@ -93,6 +111,15 @@ export function Forecast({
   // `now` only exists once the browser has it, so the server-rendered HTML and
   // the first client render agree and React does not report a mismatch.
   const [now, setNow] = useState<Date | null>(null);
+  // Read after mount, like the stored town: the server cannot see it.
+  const [nowHidden, setNowHidden] = useState(false);
+
+  useEffect(() => setNowHidden(readNowHidden()), []);
+
+  const toggleNowHidden = (hidden: boolean) => {
+    setNowHidden(hidden);
+    storeNowHidden(hidden);
+  };
 
   useEffect(() => {
     setNow(new Date());
@@ -280,19 +307,42 @@ export function Forecast({
       </header>
 
       <div className="space-y-4">
-        <NowPanel
-          forecasts={forecasts}
-          sun={days[0]?.sun ?? null}
-          now={now ?? new Date()}
-          loading={anyLoading}
-        />
-
-        <ForecastChart
-          forecasts={forecasts}
-          now={now ?? new Date()}
-          loading={anyLoading}
-          location={location}
-        />
+        <div
+          className={
+            nowHidden
+              ? ""
+              : "grid gap-4 lg:grid-cols-[minmax(0,1fr)_15rem] lg:items-stretch"
+          }
+        >
+          <ForecastChart
+            forecasts={forecasts}
+            now={now ?? new Date()}
+            loading={anyLoading}
+            location={location}
+            actions={
+              nowHidden && (
+                <button
+                  type="button"
+                  onClick={() => toggleNowHidden(false)}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-3 py-1.5 text-xs font-medium text-ink-muted transition-colors hover:border-line-strong hover:text-ink"
+                >
+                  Vis lige nu
+                </button>
+              )
+            }
+          />
+          {!nowHidden && (
+            <NowPanel
+              forecasts={forecasts}
+              sun={days[0]?.sun ?? null}
+              now={now ?? new Date()}
+              loading={anyLoading}
+              onHide={() => toggleNowHidden(true)}
+              // Above the graph on a phone, beside it once there is room.
+              className="order-first lg:order-none"
+            />
+          )}
+        </div>
 
         <DmiExtrasTop extras={extras} loading={extrasLoading} />
 

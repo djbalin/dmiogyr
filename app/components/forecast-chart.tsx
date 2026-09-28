@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Area,
   Bar,
@@ -42,8 +42,16 @@ import { WeatherIcon } from "./weather-icon";
 const MS_PER_HOUR = 3_600_000;
 /** How far ahead the graph reaches — Yr's own horizon, the longer of the two. */
 const HORIZON_DAYS = 9;
-/** How often a weather icon sits above the chart. */
-const ICON_STEP_HOURS = 6;
+/** How often a weather icon (and an hour label) can sit above the chart —
+ * the finest step that leaves each icon room to breathe at the current
+ * width wins. */
+const ICON_STEPS_HOURS = [6, 12, 24] as const;
+/** Horizontal room one icon needs, in px. */
+const MIN_ICON_SPACING = 26;
+/** Horizontal room a day label ("Ons 30.") needs, in px. */
+const MIN_DAY_LABEL_WIDTH = 52;
+/** Horizontal padding of the card (p-5, both sides). */
+const CARD_PADDING_X = 40;
 const CHART_MARGIN = { top: 8, right: 12, bottom: 0, left: 8 };
 const Y_AXIS_WIDTH = 34;
 /** Left/right inset of the chart's own plot area, so the icon and day-header
@@ -83,12 +91,28 @@ export function ForecastChart({
   now,
   loading,
   location,
+  actions,
 }: {
   forecasts: Partial<Record<ProviderId, ForecastResponse>>;
   now: Date;
   loading: boolean;
   location: Location;
+  /** Extra controls for the header, before the source toggles. */
+  actions?: React.ReactNode;
 }) {
+  const sectionRef = useRef<HTMLElement>(null);
+  const width = useElementWidth(sectionRef);
+  const plotWidth = width - CARD_PADDING_X - PLOT_INSET.left - PLOT_INSET.right;
+  // Before the first measurement (and on the server), assume the widest
+  // layout rather than flashing the sparsest one.
+  const iconStep =
+    width === 0
+      ? ICON_STEPS_HOURS[0]
+      : (ICON_STEPS_HOURS.find(
+          (step) =>
+            plotWidth / ((HORIZON_DAYS * 24) / step) >= MIN_ICON_SPACING,
+        ) ?? ICON_STEPS_HOURS[ICON_STEPS_HOURS.length - 1]);
+
   const [visible, setVisible] = useState<Record<ProviderId, boolean>>({
     dmi: true,
     yr: true,
@@ -145,27 +169,32 @@ export function ForecastChart({
     }
     for (const t of dayTicks)
       headers.push({ time: t, day: zonedDayKey(new Date(t)) });
-    return headers.map(({ time, day }) => ({
-      time,
-      // Full-length day names ("Torsdag · 27. aug.") only fit DMI's own
-      // ~2-day-wide graph; at this 9-day zoom each day gets under 110px, so
-      // "today" stays as a full label (nothing crowds its left edge) and
-      // every other day is abbreviated to weekday + date.
-      label:
-        day === today
-          ? relativeDayLabel(day, today)
-          : `${danishWeekday(day).slice(0, 3)} ${Number(day.split("-")[2])}.`,
-    }));
-  }, [domain.start, dayTicks, now]);
+    // On a narrow screen a day is too thin for its label; name every other
+    // one instead of letting them overlap.
+    const thin =
+      plotWidth > 0 && plotWidth / HORIZON_DAYS < MIN_DAY_LABEL_WIDTH;
+    return headers
+      .filter((_, index) => !thin || index % 2 === 0)
+      .map(({ time, day }) => ({
+        time,
+        // Full-length day names ("Torsdag · 27. aug.") only fit DMI's own
+        // ~2-day-wide graph; at this 9-day zoom each day gets under 110px, so
+        // "today" stays as a full label (nothing crowds its left edge) and
+        // every other day is abbreviated to weekday + date.
+        label:
+          day === today
+            ? relativeDayLabel(day, today)
+            : `${danishWeekday(day).slice(0, 3)} ${Number(day.split("-")[2])}.`,
+      }));
+  }, [domain.start, dayTicks, now, plotWidth]);
 
-  /** Every `ICON_STEP_HOURS` from the first such boundary in range, aligned to
+  /** Every `iconStep` hours from the first such boundary in range, aligned to
    * the clock (00/06/12/18) rather than offset from "now" — both the icon row
    * and the hour labels below the chart hang off this same grid. */
-  const sixHourTicks = useMemo(() => {
+  const stepTicks = useMemo(() => {
     const firstDay = zonedDayKey(new Date(domain.start));
     const startHour = zonedHour(new Date(domain.start));
-    const alignedHour =
-      Math.ceil(startHour / ICON_STEP_HOURS) * ICON_STEP_HOURS;
+    const alignedHour = Math.ceil(startHour / iconStep) * iconStep;
     let day = firstDay;
     let hour = alignedHour;
     if (hour >= 24) {
@@ -177,22 +206,22 @@ export function ForecastChart({
     const ticks: number[] = [];
     while (t <= domain.end) {
       ticks.push(t);
-      t += ICON_STEP_HOURS * MS_PER_HOUR;
+      t += iconStep * MS_PER_HOUR;
     }
     return ticks;
-  }, [domain]);
+  }, [domain, iconStep]);
 
   const iconTicks = useMemo(() => {
     if (!primary) return [];
     const hours = forecasts[primary]?.hours ?? [];
     if (hours.length === 0) return [];
-    return sixHourTicks
+    return stepTicks
       .map((time) => ({ time, hour: nearestHour(hours, time) }))
       .filter(
         (tick): tick is { time: number; hour: HourlyForecast } =>
           tick.hour !== null,
       );
-  }, [primary, forecasts, sixHourTicks]);
+  }, [primary, forecasts, stepTicks]);
 
   const toggle = (provider: ProviderId) =>
     setVisible((previous) => ({
@@ -210,6 +239,7 @@ export function ForecastChart({
 
   return (
     <section
+      ref={sectionRef}
       aria-label="Temperatur- og nedbørsgraf"
       aria-busy={loading}
       className="rounded-2xl border border-line bg-surface p-5 shadow-[var(--shadow)]"
@@ -225,6 +255,7 @@ export function ForecastChart({
           )}
         </h2>
         <div className="flex items-center gap-2">
+          {actions}
           {PROVIDER_IDS.map((provider) => (
             <SourceToggle
               key={provider}
@@ -418,7 +449,7 @@ export function ForecastChart({
           </ResponsiveContainer>
 
           <PlotRow height={16}>
-            {sixHourTicks.map((t) => (
+            {stepTicks.map((t) => (
               <span
                 key={t}
                 className="numeric absolute top-0 -translate-x-1/2 text-[10px] text-ink-faint"
@@ -573,6 +604,21 @@ function ChartSkeleton() {
       </div>
     </div>
   );
+}
+
+/** An element's rendered width, kept current as it resizes; 0 before mount. */
+function useElementWidth(ref: React.RefObject<HTMLElement | null>): number {
+  const [width, setWidth] = useState(0);
+  useEffect(() => {
+    const element = ref.current;
+    if (!element) return;
+    const observer = new ResizeObserver(([entry]) =>
+      setWidth(entry.contentRect.width + CARD_PADDING_X),
+    );
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [ref]);
+  return width;
 }
 
 /** A full-width row inset to line up with the chart's plot area beneath it. */
