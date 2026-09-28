@@ -10,11 +10,10 @@ import {
 import { CONDITION_LABELS } from "@/lib/weather/conditions";
 import { isNight, type SunTimes } from "@/lib/weather/sun";
 import {
-  danishDate,
+  dayHeading,
   formatClock,
   formatHour,
   instantFromZoned,
-  relativeDayLabel,
   zonedHour,
 } from "@/lib/weather/time";
 import {
@@ -23,7 +22,13 @@ import {
   type ProviderId,
 } from "@/lib/weather/types";
 import { uvColor } from "@/lib/weather/uv";
-import { ChevronIcon, PROVIDER_STYLES, ProviderTag, WindArrow } from "./ui";
+import {
+  ChevronIcon,
+  PROVIDER_STYLES,
+  ProviderTag,
+  SunIcon,
+  WindArrow,
+} from "./ui";
 import { WeatherIcon } from "./weather-icon";
 
 /*
@@ -32,9 +37,9 @@ import { WeatherIcon } from "./weather-icon";
  * declared once here and reused by the headers, so a header can never drift
  * out of alignment with the rows underneath it.
  */
-const DAY_LEAD = "w-[150px] shrink-0";
+const DAY_LEAD = "w-[210px] shrink-0";
 const DAY_ROW_COLUMNS =
-  "grid grid-cols-[40px_repeat(4,minmax(0,54px))_minmax(80px,1fr)_104px_88px_96px] items-center gap-3";
+  "grid grid-cols-[40px_repeat(4,minmax(0,1fr))_104px_88px_96px] items-center gap-3";
 
 const HOUR_LEAD = "w-[68px] shrink-0";
 const HOUR_ROW_COLUMNS =
@@ -59,45 +64,11 @@ export function DayListHeader() {
             {period.short}
           </div>
         ))}
-        <div>Spænd</div>
         <div className="text-center">Høj / lav</div>
         <div className="text-center">Nedbør</div>
         <div className="text-center">Vind</div>
       </div>
       <div className="w-6 shrink-0" />
-    </div>
-  );
-}
-
-function TemperatureBar({
-  summary,
-  provider,
-  scaleMin,
-  scaleMax,
-}: {
-  summary: DaySummary;
-  provider: ProviderId;
-  scaleMin: number;
-  scaleMax: number;
-}) {
-  const span = Math.max(1, scaleMax - scaleMin);
-  const left = Math.max(
-    0,
-    Math.min(100, ((summary.minTemperature - scaleMin) / span) * 100),
-  );
-  const width = Math.max(
-    5,
-    Math.min(
-      100 - left,
-      ((summary.maxTemperature - summary.minTemperature) / span) * 100,
-    ),
-  );
-  return (
-    <div className="h-1.5 w-full rounded-full bg-line" aria-hidden="true">
-      <div
-        className={`h-1.5 rounded-full ${PROVIDER_STYLES[provider].bar}`}
-        style={{ marginLeft: `${left}%`, width: `${width}%` }}
-      />
     </div>
   );
 }
@@ -128,13 +99,9 @@ function PeriodIcons({ summary, size }: { summary: DaySummary; size: number }) {
 function DesktopProviderRow({
   provider,
   summary,
-  scaleMin,
-  scaleMax,
 }: {
   provider: ProviderId;
   summary: DaySummary | undefined;
-  scaleMin: number;
-  scaleMax: number;
 }) {
   const styles = PROVIDER_STYLES[provider];
 
@@ -142,7 +109,7 @@ function DesktopProviderRow({
     return (
       <div className={DAY_ROW_COLUMNS}>
         <ProviderTag provider={provider} className="opacity-50" />
-        <div className="col-span-8 text-sm text-ink-faint">
+        <div className="col-span-7 text-sm text-ink-faint">
           Ingen udsigt så langt frem
         </div>
       </div>
@@ -153,12 +120,6 @@ function DesktopProviderRow({
     <div className={DAY_ROW_COLUMNS}>
       <ProviderTag provider={provider} />
       <PeriodIcons summary={summary} size={30} />
-      <TemperatureBar
-        summary={summary}
-        provider={provider}
-        scaleMin={scaleMin}
-        scaleMax={scaleMax}
-      />
       <div className={`numeric text-center ${styles.text}`}>
         <span className="text-lg font-semibold">
           {Math.round(summary.maxTemperature)}°
@@ -183,23 +144,19 @@ export function DayCard({
   data,
   today,
   now,
-  scaleMin,
-  scaleMax,
   open,
   onToggle,
 }: {
   data: DayData;
   today: string;
   now: Date;
-  scaleMin: number;
-  scaleMax: number;
   open: boolean;
   onToggle: () => void;
 }) {
   const panelId = useId();
   const { day, sun, summaries, uv } = data;
   const spread = temperatureSpread(summaries.dmi ?? null, summaries.yr ?? null);
-  const label = relativeDayLabel(day, today);
+  const label = dayHeading(day, today);
 
   return (
     <div className="border-t border-line first:border-t-0">
@@ -217,9 +174,6 @@ export function DayCard({
               <span className="block text-base font-semibold text-ink">
                 {label}
               </span>
-              <span className="block text-sm text-ink-muted">
-                {danishDate(day)}
-              </span>
               <div className="mt-0.5 flex items-center gap-1.5">
                 <SunLine sun={sun} />
                 {uv !== undefined && <UvBadge uv={uv} />}
@@ -234,8 +188,6 @@ export function DayCard({
                   key={provider}
                   provider={provider}
                   summary={summaries[provider]}
-                  scaleMin={scaleMin}
-                  scaleMax={scaleMax}
                 />
               ))}
             </div>
@@ -247,14 +199,7 @@ export function DayCard({
           {/* Mobile */}
           <div className="lg:hidden">
             <div className="mb-2 flex items-baseline justify-between gap-2">
-              <span className="flex items-baseline gap-2">
-                <span className="text-base font-semibold text-ink">
-                  {label}
-                </span>
-                <span className="text-sm text-ink-muted">
-                  {danishDate(day)}
-                </span>
-              </span>
+              <span className="text-base font-semibold text-ink">{label}</span>
               <span className="flex items-center gap-2">
                 {spread !== null && spread >= 1 && (
                   <SpreadBadge spread={spread} />
@@ -325,7 +270,10 @@ function SunLine({
   className?: string;
 }) {
   return (
-    <span className={`numeric block text-xs text-ink-faint ${className}`}>
+    <span
+      className={`numeric flex items-center gap-1 text-xs text-ink-faint ${className}`}
+    >
+      <SunIcon />
       {sun.sunrise && sun.sunset ? (
         <>
           <span aria-hidden="true">↑</span> {formatClock(sun.sunrise)}
@@ -349,11 +297,17 @@ function UvBadge({ uv }: { uv: number }) {
   const color = uvColor(uv);
   return (
     <span
-      className="numeric inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 text-[10px] font-bold leading-none"
-      style={{ borderColor: color, color }}
+      className="inline-flex items-center gap-1 text-[10px] font-semibold text-ink-faint"
       title={`UV-indeks ${uv.toFixed(1)}`}
     >
-      {Math.round(uv)}
+      <SunIcon />
+      UV
+      <span
+        className="numeric inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 text-[10px] font-bold leading-none"
+        style={{ borderColor: color, color }}
+      >
+        {Math.round(uv)}
+      </span>
     </span>
   );
 }

@@ -3,6 +3,7 @@ import {
   addDays,
   danishDate,
   danishWeekday,
+  dayHeading,
   formatClock,
   instantFromZoned,
   relativeDayLabel,
@@ -87,5 +88,11 @@ describe("calendar labels", () => {
     expect(relativeDayLabel("2026-08-21", "2026-08-21")).toBe("I dag");
     expect(relativeDayLabel("2026-08-22", "2026-08-21")).toBe("I morgen");
     expect(relativeDayLabel("2026-08-23", "2026-08-21")).toBe("Søndag");
+  });
+
+  it("heads a day with its relative name and date on one line", () => {
+    expect(dayHeading("2026-08-21", "2026-08-21")).toBe("I dag, 21. august");
+    expect(dayHeading("2026-08-22", "2026-08-21")).toBe("I morgen, lørdag");
+    expect(dayHeading("2026-09-01", "2026-08-21")).toBe("Tirsdag 1. september");
   });
 });

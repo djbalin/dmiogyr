@@ -212,19 +212,6 @@ export function Forecast({
       .filter((day): day is DayData => day !== null);
   }, [states, today, location.lat, location.lon, extras]);
 
-  // One temperature scale across the whole week, so the range bars can be
-  // compared between days rather than each being drawn to its own scale.
-  const [scaleMin, scaleMax] = useMemo(() => {
-    const values = days.flatMap((day) =>
-      Object.values(day.summaries).flatMap((summary) => [
-        summary.minTemperature,
-        summary.maxTemperature,
-      ]),
-    );
-    if (values.length === 0) return [0, 1];
-    return [Math.floor(Math.min(...values)), Math.ceil(Math.max(...values))];
-  }, [days]);
-
   const forecasts = useMemo(() => {
     const map: Partial<Record<ProviderId, ForecastResponse>> = {};
     for (const provider of PROVIDER_IDS) {
@@ -314,8 +301,6 @@ export function Forecast({
                 data={day}
                 today={today}
                 now={now ?? new Date()}
-                scaleMin={scaleMin}
-                scaleMax={scaleMax}
                 open={openDays.has(day.day)}
                 onToggle={() => toggleDay(day.day)}
               />
