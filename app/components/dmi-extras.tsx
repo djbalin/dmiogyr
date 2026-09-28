@@ -160,7 +160,7 @@ function RegionalForecastCard({
   const { regionalForecast } = details;
   return (
     <section className="rounded-2xl border border-line bg-surface p-5 shadow-[var(--shadow)]">
-      <h2 className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint">
+      <h2 className="text-xs font-semibold uppercase tracking-wider text-ink-faint">
         DMI's udsigt for {regionalForecast.area || "området"}
       </h2>
       {regionalForecast.headline && (
@@ -183,7 +183,7 @@ function SunCard({ details }: { details: NonNullable<DmiExtras["details"]> }) {
   if (!today) return null;
   return (
     <section className="rounded-2xl border border-line bg-surface p-5 shadow-[var(--shadow)]">
-      <h2 className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint">
+      <h2 className="text-xs font-semibold uppercase tracking-wider text-ink-faint">
         Sol i dag
       </h2>
       <div className="mt-3 flex flex-wrap items-center gap-x-8 gap-y-3">
@@ -227,7 +227,7 @@ function TidePanel({
   return (
     <section className="rounded-2xl border border-line bg-surface p-5 shadow-[var(--shadow)]">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint">
+        <h2 className="text-xs font-semibold uppercase tracking-wider text-ink-faint">
           Vandstand ved nærmeste målestation
         </h2>
         <p className="text-xs text-ink-faint">

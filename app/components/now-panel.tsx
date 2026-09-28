@@ -40,7 +40,7 @@ export function NowPanel({
 
   const header = (
     <div className="flex items-center justify-between gap-2">
-      <h2 className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint">
+      <h2 className="text-xs font-semibold uppercase tracking-wider text-ink-faint">
         Lige nu
       </h2>
       <button

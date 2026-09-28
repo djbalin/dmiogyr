@@ -35,7 +35,7 @@ export function ProviderTag({
 }) {
   return (
     <span
-      className={`${PROVIDER_STYLES[provider].text} text-[10px] font-semibold uppercase tracking-wider ${className}`}
+      className={`${PROVIDER_STYLES[provider].text} text-[0.6875rem] font-semibold uppercase tracking-wider ${className}`}
     >
       {provider === "dmi" ? "DMI" : "Yr"}
     </span>

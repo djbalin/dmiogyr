@@ -81,7 +81,7 @@ export function SettingsMenu() {
           className="absolute right-0 top-full z-20 mt-2 w-60 rounded-2xl border border-line bg-surface-raised p-4 shadow-[var(--shadow)]"
         >
           <fieldset>
-            <legend className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint">
+            <legend className="text-xs font-semibold uppercase tracking-wider text-ink-faint">
               Tema
             </legend>
             <div className="mt-2 grid grid-cols-3 gap-1 rounded-full border border-line bg-surface-muted p-1">
