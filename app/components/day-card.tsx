@@ -41,9 +41,15 @@ const DAY_LEAD = "w-[210px] shrink-0";
 const DAY_ROW_COLUMNS =
   "grid grid-cols-[40px_repeat(4,minmax(0,1fr))_104px_88px_96px] items-center gap-3";
 
-const HOUR_LEAD = "w-[68px] shrink-0";
+/*
+ * The hour table puts DMI and Yr side by side instead of stacked: one line per
+ * hour, and every metric column is a DMI | Yr pair. Cloud cover and humidity
+ * only fit once there is room for them.
+ */
 const HOUR_ROW_COLUMNS =
-  "grid grid-cols-[40px_44px_repeat(5,minmax(0,1fr))] items-center gap-3";
+  "grid grid-cols-[44px_repeat(4,minmax(0,1fr))] items-center gap-x-2 sm:gap-x-4 lg:grid-cols-[64px_repeat(6,minmax(0,1fr))]";
+/** Columns hidden below `lg`. */
+const WIDE_ONLY = "hidden lg:grid";
 
 export type DayData = {
   day: string;
@@ -353,16 +359,15 @@ function HourTable({
 
   return (
     <div className="border-t border-line bg-surface-muted/60">
-      <div className="hidden items-end gap-3 border-b border-line px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-ink-faint lg:flex">
-        <div className={HOUR_LEAD}>Tid</div>
-        <div className={`flex-1 ${HOUR_ROW_COLUMNS}`}>
-          <div />
-          <div className="text-center">Vejr</div>
-          <div className="text-center">Temp.</div>
-          <div className="text-center">Nedbør mm</div>
-          <div className="text-center">Vind m/s</div>
-          <div className="text-center">Skydække</div>
-          <div className="text-center">Luftfugt.</div>
+      <div className="border-b border-line px-4 py-2 text-[10px] font-semibold uppercase tracking-wide text-ink-faint sm:text-[11px] sm:tracking-wider">
+        <div className={HOUR_ROW_COLUMNS}>
+          <div>Tid</div>
+          <HeaderCell label="Vejr" />
+          <HeaderCell label="Temp." />
+          <HeaderCell label="Nedbør" unit="mm" />
+          <HeaderCell label="Vind" unit="m/s" />
+          <HeaderCell label="Skyer" unit="%" className={WIDE_ONLY} />
+          <HeaderCell label="Luftfugt." unit="%" className={WIDE_ONLY} />
         </div>
       </div>
 
@@ -389,6 +394,72 @@ function HourTable({
   );
 }
 
+/** A metric's heading over its DMI | Yr pair of sub-columns. */
+function HeaderCell({
+  label,
+  unit,
+  className = "grid",
+}: {
+  label: string;
+  unit?: string;
+  className?: string;
+}) {
+  return (
+    <div className={`${className} grid-cols-2 gap-y-0.5 text-center`}>
+      <div className="col-span-2 truncate">
+        {label}
+        {unit && (
+          <span className="ml-1 hidden font-medium normal-case tracking-normal opacity-70 sm:inline">
+            {unit}
+          </span>
+        )}
+      </div>
+      {PROVIDER_IDS.map((provider) => (
+        <ProviderTag
+          key={provider}
+          provider={provider}
+          className="text-[9px]"
+        />
+      ))}
+    </div>
+  );
+}
+
+/**
+ * One metric for one hour: DMI's value on the left, Yr's on the right, each in
+ * its provider's colour, split by a hairline. An hour a provider has no value
+ * for (its coarse, 6-hourly range) shows a faint dot.
+ */
+function PairCell({
+  slot,
+  render,
+  className = "grid",
+}: {
+  slot: Partial<Record<ProviderId, HourlyForecast>>;
+  render: (entry: HourlyForecast, provider: ProviderId) => React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={`${className} grid-cols-2 divide-x divide-line`}>
+      {PROVIDER_IDS.map((provider) => {
+        const entry = slot[provider];
+        return (
+          <div
+            key={provider}
+            className={`numeric flex min-w-0 items-center justify-center gap-0.5 text-xs sm:text-sm ${PROVIDER_STYLES[provider].text}`}
+          >
+            {entry ? (
+              render(entry, provider)
+            ) : (
+              <span className="text-ink-faint">·</span>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function HourRow({
   hour,
   slot,
@@ -403,118 +474,76 @@ function HourRow({
   highlighted: boolean;
 }) {
   const night = isNight(instantFromZoned(day, hour), sun);
-  const present = PROVIDER_IDS.filter((provider) => slot[provider]);
 
   return (
     <div
-      className={`border-b border-line/70 px-4 py-2 last:border-b-0 ${
+      className={`border-b border-line/70 px-4 py-1.5 last:border-b-0 ${
         highlighted ? "bg-surface ring-1 ring-inset ring-accent/40" : ""
       }`}
     >
-      {/* Desktop */}
-      <div className="hidden items-center gap-3 lg:flex">
-        <div
-          className={`numeric ${HOUR_LEAD} text-sm font-medium text-ink-muted`}
-        >
-          {formatHour(hour)}:00
+      <div className={HOUR_ROW_COLUMNS}>
+        <div className="numeric text-sm font-medium text-ink-muted">
+          {formatHour(hour)}
+          <span className="hidden sm:inline">:00</span>
           {highlighted && (
             <span className="ml-1 text-[10px] font-semibold uppercase text-accent">
               nu
             </span>
           )}
         </div>
-        <div className="flex-1 space-y-1">
-          {present.map((provider) => {
-            const entry = slot[provider] as HourlyForecast;
+        <PairCell
+          slot={slot}
+          render={(entry) => {
             const condition = conditionFor(entry);
-            const styles = PROVIDER_STYLES[provider];
             return (
-              <div key={provider} className={HOUR_ROW_COLUMNS}>
-                <ProviderTag provider={provider} />
-                <div
-                  className="flex justify-center"
-                  title={CONDITION_LABELS[condition]}
-                >
-                  <WeatherIcon
-                    condition={condition}
-                    night={night}
-                    size={24}
-                    decorative
-                  />
-                </div>
-                <div
-                  className={`numeric text-center text-sm font-semibold ${styles.text}`}
-                >
-                  {Math.round(entry.temperature)}°
-                </div>
-                <div className={`numeric text-center text-sm ${styles.text}`}>
-                  {entry.precipitation >= 0.05
-                    ? entry.precipitation.toFixed(1)
-                    : "—"}
-                </div>
-                <div
-                  className={`numeric flex items-center justify-center gap-1 text-sm ${styles.text}`}
-                >
-                  <WindArrow degrees={entry.windDirection} />
-                  {Math.round(entry.windSpeed)}
-                </div>
-                <div className={`numeric text-center text-sm ${styles.text}`}>
-                  {Math.round(entry.cloudCover)}%
-                </div>
-                <div className={`numeric text-center text-sm ${styles.text}`}>
-                  {Math.round(entry.humidity)}%
-                </div>
-              </div>
+              <span title={CONDITION_LABELS[condition]}>
+                <WeatherIcon
+                  condition={condition}
+                  night={night}
+                  size={22}
+                  decorative
+                />
+              </span>
             );
-          })}
-        </div>
-      </div>
-
-      {/* Mobile */}
-      <div className="lg:hidden">
-        <div className="mb-1 flex items-center gap-2">
-          <span className="numeric text-sm font-medium text-ink-muted">
-            {formatHour(hour)}:00
-          </span>
-          {highlighted && (
-            <span className="text-[10px] font-semibold uppercase text-accent">
-              nu
+          }}
+        />
+        <PairCell
+          slot={slot}
+          render={(entry) => (
+            <span className="font-semibold">
+              {Math.round(entry.temperature)}°
             </span>
           )}
-        </div>
-        {present.map((provider) => {
-          const entry = slot[provider] as HourlyForecast;
-          const condition = conditionFor(entry);
-          const styles = PROVIDER_STYLES[provider];
-          return (
-            <div
-              key={provider}
-              className="grid grid-cols-[36px_28px_44px_1fr_1fr] items-center gap-2 py-0.5"
-            >
-              <ProviderTag provider={provider} />
-              <WeatherIcon
-                condition={condition}
-                night={night}
-                size={22}
-                decorative
-              />
-              <span className={`numeric text-sm font-semibold ${styles.text}`}>
-                {Math.round(entry.temperature)}°
-              </span>
-              <span className={`numeric text-xs ${styles.text}`}>
-                {entry.precipitation >= 0.05
-                  ? `${entry.precipitation.toFixed(1)} mm`
-                  : "0 mm"}
-              </span>
-              <span
-                className={`numeric flex items-center gap-1 text-xs ${styles.text}`}
-              >
-                <WindArrow degrees={entry.windDirection} />
-                {Math.round(entry.windSpeed)} m/s
-              </span>
-            </div>
-          );
-        })}
+        />
+        <PairCell
+          slot={slot}
+          render={(entry) =>
+            entry.precipitation >= 0.05 ? (
+              entry.precipitation.toFixed(1)
+            ) : (
+              <span className="opacity-50">—</span>
+            )
+          }
+        />
+        <PairCell
+          slot={slot}
+          render={(entry) => (
+            <>
+              <WindArrow degrees={entry.windDirection} size={12} />
+              {Math.round(entry.windSpeed)}
+            </>
+          )}
+        />
+        <PairCell
+          slot={slot}
+          className={WIDE_ONLY}
+          render={(entry) => Math.round(entry.cloudCover)}
+        />
+        <PairCell
+          slot={slot}
+          className={WIDE_ONLY}
+          render={(entry) => Math.round(entry.humidity)}
+        />
       </div>
     </div>
   );
