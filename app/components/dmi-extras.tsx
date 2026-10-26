@@ -11,7 +11,7 @@ import { Skeleton, WarningIcon } from "./ui";
  * its written regional forecast, sun times, active weather warnings, and —
  * for towns near the coast — the water level. (UV index rides along with
  * the day-by-day table instead, as a badge, since it is per-day data like
- * the rest of that row.)
+ * the rest of that row; sun times sit in the "Lige nu" card.)
  *
  * Fetched separately from the DMI/Yr hourly comparison: none of this exists
  * for Yr, and each of these upstream calls is free to fail without taking
@@ -48,31 +48,18 @@ export function useDmiExtras(locationId: string): {
   return { extras, loading };
 }
 
-/** Warnings banner and sun times — sits right under "Lige nu". */
-export function DmiExtrasTop({
-  extras,
-  loading,
-}: {
-  extras: DmiExtras | null;
-  loading: boolean;
-}) {
-  if (loading && !extras) return <Skeleton className="h-12" />;
-  if (!extras) return null;
-
-  const hasWarning = extras.warnings && extras.warnings.level !== "none";
-  const hasSun = (extras.details?.sun.length ?? 0) > 0;
-  if (!hasWarning && !hasSun) return null;
-
+/**
+ * The warnings banner — sits right under the graph. Nothing while loading:
+ * most days there is no warning, and a placeholder that then vanishes would
+ * only make the page jump.
+ */
+export function DmiExtrasTop({ extras }: { extras: DmiExtras | null }) {
+  if (!extras?.warnings || extras.warnings.level === "none") return null;
   return (
-    <div className="space-y-4">
-      {extras.warnings && hasWarning && (
-        <WarningBanner
-          level={extras.warnings.level}
-          count={extras.warnings.warnings.length}
-        />
-      )}
-      {hasSun && extras.details && <SunCard details={extras.details} />}
-    </div>
+    <WarningBanner
+      level={extras.warnings.level}
+      count={extras.warnings.warnings.length}
+    />
   );
 }
 
@@ -176,41 +163,6 @@ function RegionalForecastCard({
       )}
     </section>
   );
-}
-
-function SunCard({ details }: { details: NonNullable<DmiExtras["details"]> }) {
-  const today = details.sun[0];
-  if (!today) return null;
-  return (
-    <section className="rounded-2xl border border-line bg-surface p-5 shadow-[var(--shadow)]">
-      <h2 className="text-xs font-semibold uppercase tracking-wider text-ink-faint">
-        Sol i dag
-      </h2>
-      <div className="mt-3 flex flex-wrap items-center gap-x-8 gap-y-3">
-        <Stat label="Solopgang" value={today.sunrise} />
-        <Stat label="Solnedgang" value={today.sunset} />
-        <Stat
-          label="Dagslængde"
-          value={formatDayLength(today.dayLengthSeconds)}
-        />
-      </div>
-    </section>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <dt className="text-xs text-ink-faint">{label}</dt>
-      <dd className="numeric text-base font-semibold text-ink">{value}</dd>
-    </div>
-  );
-}
-
-function formatDayLength(seconds: number): string {
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.round((seconds % 3600) / 60);
-  return `${hours} t ${minutes} min`;
 }
 
 function TidePanel({

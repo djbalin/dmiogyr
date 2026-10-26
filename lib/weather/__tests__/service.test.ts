@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mockDmiResponse, mockYrResponse } from "../mock";
-import { getForecast, resetForecastCache, UpstreamError } from "../service";
+import {
+  getForecast,
+  resetForecastCache,
+  resolveLocation,
+  UpstreamError,
+} from "../service";
 
 const originalFetch = globalThis.fetch;
 
@@ -161,5 +166,74 @@ describe("getForecast", () => {
     expect(fetchMock).not.toHaveBeenCalled();
     expect(forecast.hours.length).toBeGreaterThan(0);
     expect(forecast.location.name).toBe("Aarhus");
+  });
+});
+
+describe("resolveLocation", () => {
+  it("knows the built-in towns without asking anyone", async () => {
+    const fetchMock = vi.fn();
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+    expect((await resolveLocation("2624652")).name).toBe("Aarhus");
+    expect((await resolveLocation("aarhus")).id).toBe("2624652");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("falls back to the default for something that is not an id", async () => {
+    expect((await resolveLocation("atlantis")).name).toBe("København");
+    expect((await resolveLocation(null)).name).toBe("København");
+  });
+
+  it("places any other id through DMI, and reuses that call for its forecast", async () => {
+    const dmi = { ...mockDmiResponse(55.4581, 12.1821), city: "Køge" };
+    const fetchMock = vi.fn(async (url: string) =>
+      url.includes("dmi.dk")
+        ? jsonResponse(dmi)
+        : jsonResponse(mockYrResponse(55.4581, 12.1821)),
+    );
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const location = await resolveLocation("2618528");
+    expect(location).toEqual({
+      id: "2618528",
+      name: "Køge",
+      lat: 55.4581,
+      lon: 12.1821,
+    });
+
+    const forecast = await getForecast("dmi", "2618528");
+    expect(forecast.location.name).toBe("Køge");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    await getForecast("yr", "2618528");
+    const yrUrl = new URL(fetchMock.mock.calls[1][0]);
+    expect(yrUrl.searchParams.get("lat")).toBe("55.4581");
+    expect(yrUrl.searchParams.get("lon")).toBe("12.1821");
+  });
+
+  it("shares one DMI call between simultaneous requests for a new place", async () => {
+    const fetchMock = vi.fn(async () =>
+      jsonResponse(mockDmiResponse(55.4581, 12.1821)),
+    );
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+    await Promise.all([
+      resolveLocation("2618528"),
+      getForecast("dmi", "2618528"),
+      resolveLocation("2618528"),
+    ]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("fails rather than guessing when DMI gives no position", async () => {
+    const {
+      latitude: _lat,
+      longitude: _lon,
+      ...noPosition
+    } = mockDmiResponse(55.4581, 12.1821);
+    globalThis.fetch = vi.fn(async () =>
+      jsonResponse(noPosition),
+    ) as unknown as typeof fetch;
+    await expect(resolveLocation("2618528")).rejects.toMatchObject({
+      status: 404,
+    });
   });
 });

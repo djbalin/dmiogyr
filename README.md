@@ -65,12 +65,14 @@ pnpm check          # lint + typecheck + test, what CI runs
 app/
 ├── api/
 │   ├── dmi/route.ts        # GET /api/dmi?location=<id>
-│   └── yr/route.ts         # GET /api/yr?location=<id>
+│   ├── yr/route.ts         # GET /api/yr?location=<id>
+│   └── steder/route.ts     # GET /api/steder?q=<text>, place search
 ├── components/             # the UI, split by responsibility
 │   ├── forecast.tsx        # fetching, state, page composition
 │   ├── day-card.tsx        # a day row and its hourly table
 │   ├── now-panel.tsx       # the "right now" headline
-│   ├── location-picker.tsx
+│   ├── location-search.tsx # search box with suggestions
+│   ├── theme-toggle.tsx    # auto/light/dark in the header
 │   ├── weather-icon.tsx    # inline SVG icon set
 │   └── ui.tsx              # shared primitives and provider styling
 └── page.tsx                # reads ?sted= and renders the client app
@@ -83,10 +85,13 @@ lib/weather/
 ├── aggregate.ts            # grouping, day summaries, provider spread
 ├── cache.ts                # TTL cache with stale-on-error
 ├── service.ts              # fetch, normalise, cache, degrade
-├── locations.ts            # the towns you can pick
+├── locations.ts            # place shape, built-in towns, id parsing
+├── search-service.ts       # place search through DMI's index
+├── tide-stations.ts        # nearest water-level station
 ├── mock.ts                 # fixture generation for WEATHER_MOCK
 └── providers/
     ├── dmi.ts              # DMI request building and normalisation
+    ├── dmi-search.ts       # DMI place search query and results
     └── yr.ts               # Yr request building and normalisation
 ```
 
@@ -156,9 +161,13 @@ rather than relying on teal versus indigo.
 | Weather symbols | None | Yes |
 | Docs | [DMI](https://opendatadocs.dmi.govcloud.dk/) | [Yr](https://developer.yr.no/) |
 
-The location list is deliberately a fixed set of Danish towns rather than a
-free-text geocoder: DMI's model only covers the Nordic region, so anywhere it
-cannot forecast would defeat the comparison.
+Places are found through the same search index dmi.dk's own search box uses
+(`/solr/city_core/select`), so every suggestion is somewhere DMI forecasts for,
+villages included, with nothing in this repo to keep up to date. A place is
+identified by DMI's GeoNames id (`?sted=2614481`); its coordinates, which Yr
+needs, come from DMI's forecast response for that id, so resolving a new place
+and fetching its DMI forecast are one upstream call. The old town slugs
+(`?sted=roskilde`) still work.
 
 ## Deploying
 

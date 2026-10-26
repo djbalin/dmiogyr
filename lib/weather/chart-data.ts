@@ -89,3 +89,67 @@ export function buildChartRows(
     yrPrecip: yr[index]?.precip ?? null,
   }));
 }
+
+/** Both providers' precipitation over one stretch of the time axis. */
+export type PrecipBucket = {
+  start: number;
+  end: number;
+  /** Millimetres over the whole bucket, or null where the provider has no data. */
+  dmi: number | null;
+  yr: number | null;
+};
+
+/**
+ * Sum the hourly precipitation into the buckets `boundaries` mark out, from
+ * `domain.start` to `domain.end`.
+ *
+ * One bar per provider per hour is a comb of hairlines at any width that fits
+ * a few days; a bar per bucket of a few hours is wide enough to read and
+ * still shows when the rain comes. Boundaries are expected on the clock
+ * (00, 03, 06…), every `stepMs`, so the first and last bucket can be partial;
+ * one shorter than half a step is folded into its neighbour rather than drawn
+ * as a sliver.
+ */
+export function bucketPrecipitation(
+  rows: ChartRow[],
+  domain: Domain,
+  boundaries: number[],
+  stepMs: number,
+): PrecipBucket[] {
+  const inner = boundaries.filter((t) => t > domain.start && t < domain.end);
+  if (inner.length > 0 && inner[0] - domain.start < stepMs / 2) inner.shift();
+  if (inner.length > 0 && domain.end - (inner.at(-1) ?? 0) < stepMs / 2) {
+    inner.pop();
+  }
+  const edges = [domain.start, ...inner, domain.end];
+  const buckets: PrecipBucket[] = [];
+  for (let i = 0; i + 1 < edges.length; i++) {
+    const start = edges[i];
+    const end = edges[i + 1];
+    const inside = rows.filter((row) => row.time >= start && row.time < end);
+    buckets.push({
+      start,
+      end,
+      dmi: sumOrNull(inside.map((row) => row.dmiPrecip)),
+      yr: sumOrNull(inside.map((row) => row.yrPrecip)),
+    });
+  }
+  return buckets;
+}
+
+function sumOrNull(values: (number | null)[]): number | null {
+  const present = values.filter((value): value is number => value !== null);
+  if (present.length === 0) return null;
+  return present.reduce((sum, value) => sum + value, 0);
+}
+
+/** The smallest of 1, 2, 5, 10, 20… mm at or above `max`, for the bar scale. */
+export function precipScaleMax(max: number): number {
+  let step = 1;
+  while (true) {
+    for (const factor of [1, 2, 5]) {
+      if (max <= step * factor) return step * factor;
+    }
+    step *= 10;
+  }
+}

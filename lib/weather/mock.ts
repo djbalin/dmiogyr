@@ -108,6 +108,8 @@ export function mockDmiResponse(
   return {
     id: "0",
     city: "Mock",
+    latitude: lat,
+    longitude: lon,
     timezone: "Europe/Copenhagen",
     timeserie: samples.map((sample) => ({
       localTimeIso: sample.time.toISOString(),

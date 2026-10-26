@@ -1,5 +1,4 @@
 import { TtlCache } from "./cache";
-import { findLocation } from "./locations";
 import {
   buildDmiDetailsUrl,
   buildDmiWarningsUrl,
@@ -11,6 +10,8 @@ import {
   normaliseTide,
   type TidePoint,
 } from "./providers/dmi-extras";
+import { resolveLocation } from "./service";
+import { nearestTideStation } from "./tide-stations";
 
 export type DmiExtras = {
   details: DmiLocationDetails | null;
@@ -20,7 +21,7 @@ export type DmiExtras = {
 
 type CachedExtras = { value: DmiExtras; updatedAt: string };
 
-const cache = new TtlCache<CachedExtras>();
+const cache = new TtlCache<CachedExtras>(256);
 
 /** The text/sun/UV/warnings change at most a few times a day. */
 const DETAILS_TTL_MS = 30 * 60 * 1000;
@@ -51,20 +52,24 @@ export async function getDmiExtras(locationId: string | null): Promise<{
   extras: DmiExtras;
   freshness: "live" | "stale";
 }> {
-  const location = findLocation(locationId);
+  const empty: DmiExtras = { details: null, warnings: null, tide: null };
+  const location = await resolveLocation(locationId).catch(() => null);
+  if (!location) return { extras: empty, freshness: "live" };
   const cacheKey = location.id;
+  const geonameId = Number(location.id);
+  const tideStation = nearestTideStation(location);
 
   const fresh = cache.fresh(cacheKey);
   if (fresh) return { extras: fresh.value.value, freshness: "live" };
 
   const [detailsRaw, warningsRaw, tideObsRaw, tideFcstRaw] = await Promise.all([
-    fetchJson(buildDmiDetailsUrl(location.dmiGeonameId)),
-    fetchJson(buildDmiWarningsUrl(location.dmiGeonameId)),
-    location.dmiTideStationId
-      ? fetchJson(buildTideUrl(location.dmiTideStationId, "obs"))
+    fetchJson(buildDmiDetailsUrl(geonameId)),
+    fetchJson(buildDmiWarningsUrl(geonameId)),
+    tideStation
+      ? fetchJson(buildTideUrl(tideStation.id, "obs"))
       : Promise.resolve(null),
-    location.dmiTideStationId
-      ? fetchJson(buildTideUrl(location.dmiTideStationId, "fcst"))
+    tideStation
+      ? fetchJson(buildTideUrl(tideStation.id, "fcst"))
       : Promise.resolve(null),
   ]);
 
@@ -105,7 +110,7 @@ export async function getDmiExtras(locationId: string | null): Promise<{
   cache.set(
     cacheKey,
     { value: extras, updatedAt },
-    location.dmiTideStationId ? TIDE_TTL_MS : DETAILS_TTL_MS,
+    tideStation ? TIDE_TTL_MS : DETAILS_TTL_MS,
   );
 
   return { extras, freshness: "live" };
