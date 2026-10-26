@@ -1,5 +1,5 @@
-// Shared by the server layout (the pre-paint script) and the client settings
-// menu, so it must not live in a "use client" module: a server component
+// Shared by the server layout (the pre-paint script) and the client theme
+// toggle, so it must not live in a "use client" module: a server component
 // importing a constant from one gets a client reference, not the value.
 
 export type ThemePreference = "system" | "light" | "dark";

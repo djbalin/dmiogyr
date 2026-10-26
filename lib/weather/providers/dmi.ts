@@ -35,6 +35,10 @@ type DmiTimeserieEntry = {
 export type DmiResponse = {
   id: string;
   city: string;
+  /** Degrees north of the point DMI forecasts for. */
+  latitude?: number;
+  /** Degrees east of the point DMI forecasts for. */
+  longitude?: number;
   timezone: string;
   timeserie: DmiTimeserieEntry[];
 };
@@ -45,6 +49,23 @@ export type DmiResponse = {
  */
 export function buildDmiUrl(geonameId: number): string {
   return `https://www.dmi.dk/NinJo2DmiDk/ninjo2dmidk?cmd=llj&id=${geonameId}`;
+}
+
+/**
+ * The place a `llj` response is for, which is how a GeoNames id picked from
+ * search becomes coordinates Yr can be asked about. Null when the response
+ * does not carry a usable position.
+ */
+export function placeFromDmi(
+  id: string,
+  data: DmiResponse,
+): { id: string; name: string; lat: number; lon: number } | null {
+  const lat = Number(data?.latitude);
+  const lon = Number(data?.longitude);
+  const name = typeof data?.city === "string" ? data.city.trim() : "";
+  if (!name || !Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  if (Math.abs(lat) > 90 || Math.abs(lon) > 180) return null;
+  return { id, name, lat, lon };
 }
 
 const MS_PER_HOUR = 3_600_000;

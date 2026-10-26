@@ -2,17 +2,26 @@
 
 import { conditionFor, hourAt } from "@/lib/weather/aggregate";
 import { CONDITION_LABELS } from "@/lib/weather/conditions";
+import type { DmiLocationDetails } from "@/lib/weather/providers/dmi-extras";
 import { isNight, type SunTimes } from "@/lib/weather/sun";
+import { formatClock } from "@/lib/weather/time";
 import {
   type ForecastResponse,
   PROVIDER_IDS,
   type ProviderId,
 } from "@/lib/weather/types";
-import { PROVIDER_STYLES, ProviderTag, Skeleton, WindArrow } from "./ui";
+import {
+  PROVIDER_STYLES,
+  ProviderTag,
+  Skeleton,
+  SunIcon,
+  WindArrow,
+} from "./ui";
 import { WeatherIcon } from "./weather-icon";
 
 /**
- * The headline card: what both providers think is happening right now.
+ * The headline card: what both providers think is happening right now, and
+ * today's sunrise, sunset and day length.
  *
  * Deliberately compact — it sits in a narrow column beside the graph on wide
  * screens (above it on a phone) and can be hidden entirely, letting the graph
@@ -21,6 +30,7 @@ import { WeatherIcon } from "./weather-icon";
 export function NowPanel({
   forecasts,
   sun,
+  dmiSun,
   now,
   loading,
   onHide,
@@ -28,6 +38,8 @@ export function NowPanel({
 }: {
   forecasts: Partial<Record<ProviderId, ForecastResponse>>;
   sun: SunTimes | null;
+  /** DMI's own sun times for today, preferred over `sun` when present. */
+  dmiSun: DmiLocationDetails["sun"][number] | null;
   now: Date;
   loading: boolean;
   onHide: () => void;
@@ -147,6 +159,8 @@ export function NowPanel({
         })}
       </div>
 
+      <SunRow sun={sun} dmiSun={dmiSun} />
+
       {disagreement !== null && (
         <p className="mt-3 border-t border-line pt-2.5 text-xs text-ink-muted">
           {disagreement === 0 ? (
@@ -163,6 +177,64 @@ export function NowPanel({
       )}
     </section>
   );
+}
+
+/**
+ * Today's sun, as dmi.dk lists it. DMI's figures win when they have arrived;
+ * until then (or if that feed is down) the locally computed times stand in,
+ * so the row never waits on a second request.
+ */
+function SunRow({
+  sun,
+  dmiSun,
+}: {
+  sun: SunTimes | null;
+  dmiSun: DmiLocationDetails["sun"][number] | null;
+}) {
+  let sunrise: string | null = null;
+  let sunset: string | null = null;
+  let dayLengthSeconds: number | null = null;
+
+  if (dmiSun) {
+    sunrise = dmiSun.sunrise;
+    sunset = dmiSun.sunset;
+    dayLengthSeconds = dmiSun.dayLengthSeconds;
+  } else if (sun?.sunrise && sun.sunset) {
+    sunrise = formatClock(sun.sunrise);
+    sunset = formatClock(sun.sunset);
+    dayLengthSeconds = (sun.sunset.getTime() - sun.sunrise.getTime()) / 1000;
+  }
+  if (!sunrise || !sunset || dayLengthSeconds === null) return null;
+
+  // One line, as the day table shows sun times, so it fits the narrow
+  // column beside the graph; the labels are there for screen readers and
+  // on hover.
+  return (
+    <dl className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line pt-2.5 text-xs text-ink-muted">
+      <SunIcon />
+      <SunStat label="Solopgang" value={`↑ ${sunrise}`} />
+      <SunStat label="Solnedgang" value={`↓ ${sunset}`} />
+      <SunStat
+        label="Dagslængde"
+        value={`${formatDayLength(dayLengthSeconds)} lys`}
+      />
+    </dl>
+  );
+}
+
+function SunStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div title={label}>
+      <dt className="sr-only">{label}</dt>
+      <dd className="numeric font-medium text-ink">{value}</dd>
+    </div>
+  );
+}
+
+function formatDayLength(seconds: number): string {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.round((seconds % 3600) / 60);
+  return `${hours} t ${minutes} m`;
 }
 
 function CollapseIcon() {

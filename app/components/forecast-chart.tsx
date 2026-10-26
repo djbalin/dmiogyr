@@ -3,8 +3,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Area,
-  Bar,
-  BarChart,
   CartesianGrid,
   ComposedChart,
   ReferenceLine,
@@ -14,7 +12,14 @@ import {
   YAxis,
 } from "recharts";
 import { conditionFor } from "@/lib/weather/aggregate";
-import { buildChartRows, type ChartRow } from "@/lib/weather/chart-data";
+import {
+  bucketPrecipitation,
+  buildChartRows,
+  type ChartRow,
+  type Domain,
+  type PrecipBucket,
+  precipScaleMax,
+} from "@/lib/weather/chart-data";
 import { CONDITION_LABELS } from "@/lib/weather/conditions";
 import type { Location } from "@/lib/weather/locations";
 import { computeSunTimes, isNight } from "@/lib/weather/sun";
@@ -40,12 +45,18 @@ import { PROVIDER_STYLES, RefreshIcon, Skeleton } from "./ui";
 import { WeatherIcon } from "./weather-icon";
 
 const MS_PER_HOUR = 3_600_000;
-/** How far ahead the graph reaches — Yr's own horizon, the longer of the two. */
-const HORIZON_DAYS = 9;
+/** How far ahead the graph reaches: the near term, where hour-by-hour detail
+ * matters. The day table below covers the rest of the week. */
+const HORIZON_DAYS = 3;
 /** How often a weather icon (and an hour label) can sit above the chart —
  * the finest step that leaves each icon room to breathe at the current
  * width wins. */
-const ICON_STEPS_HOURS = [6, 12, 24] as const;
+const ICON_STEPS_HOURS = [3, 6, 12] as const;
+/** Hours of precipitation per bar group, finest first, as for the icons. */
+const PRECIP_BUCKET_HOURS = [3, 6] as const;
+/** Horizontal room one bar group (a DMI and a Yr bar) needs, in px. */
+const MIN_PRECIP_GROUP_WIDTH = 16;
+const PRECIP_HEIGHT = 90;
 /** Horizontal room one icon needs, in px. */
 const MIN_ICON_SPACING = 26;
 /** Horizontal room a day label ("Ons 30.") needs, in px. */
@@ -112,6 +123,14 @@ export function ForecastChart({
           (step) =>
             plotWidth / ((HORIZON_DAYS * 24) / step) >= MIN_ICON_SPACING,
         ) ?? ICON_STEPS_HOURS[ICON_STEPS_HOURS.length - 1]);
+
+  const precipBucketHours =
+    width === 0
+      ? PRECIP_BUCKET_HOURS[0]
+      : (PRECIP_BUCKET_HOURS.find(
+          (hours) =>
+            plotWidth / ((HORIZON_DAYS * 24) / hours) >= MIN_PRECIP_GROUP_WIDTH,
+        ) ?? PRECIP_BUCKET_HOURS[PRECIP_BUCKET_HOURS.length - 1]);
 
   const [visible, setVisible] = useState<Record<ProviderId, boolean>>({
     dmi: true,
@@ -182,39 +201,37 @@ export function ForecastChart({
       .filter((_, index) => index % stride === 0)
       .map(({ time, day }) => ({
         time,
-        // Full-length day names ("Torsdag · 27. aug.") only fit DMI's own
-        // ~2-day-wide graph; at this 9-day zoom each day gets under 110px, so
-        // "today" stays as a full label (nothing crowds its left edge) and
-        // every other day is abbreviated to weekday + date.
+        // "I dag" and "I morgen" read best; further out, the weekday in full
+        // when a day is wide enough for it, abbreviated on a phone.
         label:
-          day === today
+          relativeDayLabel(day, today) !== danishWeekday(day)
             ? relativeDayLabel(day, today)
-            : `${danishWeekday(day).slice(0, 3)} ${Number(day.split("-")[2])}.`,
+            : `${
+                plotWidth / HORIZON_DAYS >= 120
+                  ? danishWeekday(day)
+                  : danishWeekday(day).slice(0, 3)
+              } ${Number(day.split("-")[2])}.`,
       }));
   }, [domain.start, dayTicks, now, plotWidth]);
 
   /** Every `iconStep` hours from the first such boundary in range, aligned to
    * the clock (00/06/12/18) rather than offset from "now" — both the icon row
    * and the hour labels below the chart hang off this same grid. */
-  const stepTicks = useMemo(() => {
-    const firstDay = zonedDayKey(new Date(domain.start));
-    const startHour = zonedHour(new Date(domain.start));
-    const alignedHour = Math.ceil(startHour / iconStep) * iconStep;
-    let day = firstDay;
-    let hour = alignedHour;
-    if (hour >= 24) {
-      hour -= 24;
-      day = addDays(day, 1);
-    }
-    let t = instantFromZoned(day, hour).getTime();
+  const stepTicks = useMemo(
+    () => clockTicks(domain, iconStep),
+    [domain, iconStep],
+  );
 
-    const ticks: number[] = [];
-    while (t <= domain.end) {
-      ticks.push(t);
-      t += iconStep * MS_PER_HOUR;
-    }
-    return ticks;
-  }, [domain, iconStep]);
+  const precipBuckets = useMemo(
+    () =>
+      bucketPrecipitation(
+        rows,
+        domain,
+        clockTicks(domain, precipBucketHours),
+        precipBucketHours * MS_PER_HOUR,
+      ),
+    [rows, domain, precipBucketHours],
+  );
 
   const iconTicks = useMemo(() => {
     if (!primary) return [];
@@ -406,52 +423,12 @@ export function ForecastChart({
             </ComposedChart>
           </ResponsiveContainer>
 
-          <ResponsiveContainer width="100%" height={90}>
-            <BarChart data={rows} margin={CHART_MARGIN} syncId="forecast">
-              {dayTicks.map((t) => (
-                <ReferenceLine
-                  key={t}
-                  x={t}
-                  stroke="var(--color-line-strong)"
-                />
-              ))}
-              <XAxis
-                dataKey="time"
-                type="number"
-                domain={[domain.start, domain.end]}
-                tick={false}
-                axisLine={false}
-                tickLine={false}
-              />
-              <YAxis
-                width={Y_AXIS_WIDTH}
-                tick={{ fill: "var(--color-ink-faint)", fontSize: 11 }}
-                axisLine={false}
-                tickLine={false}
-                tickFormatter={(v: number) => `${v}`}
-              />
-              <Tooltip
-                content={() => null}
-                cursor={{ fill: "var(--color-line)", opacity: 0.4 }}
-              />
-              {visible.dmi && (
-                <Bar
-                  dataKey="dmiPrecip"
-                  fill={PROVIDER_COLOR_VAR.dmi}
-                  radius={[1.5, 1.5, 0, 0]}
-                  isAnimationActive={false}
-                />
-              )}
-              {visible.yr && (
-                <Bar
-                  dataKey="yrPrecip"
-                  fill={PROVIDER_COLOR_VAR.yr}
-                  radius={[1.5, 1.5, 0, 0]}
-                  isAnimationActive={false}
-                />
-              )}
-            </BarChart>
-          </ResponsiveContainer>
+          <PrecipitationBars
+            buckets={precipBuckets}
+            domain={domain}
+            dayTicks={dayTicks}
+            visible={visible}
+          />
 
           <PlotRow height={16}>
             {stepTicks.map((t) => (
@@ -468,8 +445,8 @@ export function ForecastChart({
       )}
 
       <p className="mt-3 text-xs text-ink-faint">
-        Nedbør vist som søjler pr. time; se tabellen nedenfor for de nøjagtige
-        tal.
+        Nedbør i mm pr. {precipBucketHours} timer; se tabellen nedenfor for time
+        for time.
       </p>
     </section>
   );
@@ -497,7 +474,7 @@ const SKELETON_CURVES = {
 };
 
 /** Deterministic bar heights for the precipitation placeholder. */
-const SKELETON_BARS = Array.from({ length: 54 }, (_, i) => {
+const SKELETON_BARS = Array.from({ length: 24 }, (_, i) => {
   const wave = Math.max(0, Math.sin(i / 4.5) + Math.sin(i / 1.7) * 0.4);
   return Math.round(8 + wave * 40);
 });
@@ -515,7 +492,7 @@ function ChartSkeleton() {
       <span className="sr-only">Henter grafen…</span>
       <PlotRow height={20}>
         <div className="flex h-full items-start justify-between">
-          {Array.from({ length: 9 }, (_, i) => (
+          {Array.from({ length: HORIZON_DAYS }, (_, i) => (
             // biome-ignore lint/suspicious/noArrayIndexKey: static placeholders
             <Skeleton key={i} className="h-3.5 w-11" />
           ))}
@@ -523,7 +500,7 @@ function ChartSkeleton() {
       </PlotRow>
       <PlotRow height={26}>
         <div className="flex h-full items-start justify-between">
-          {Array.from({ length: 18 }, (_, i) => (
+          {Array.from({ length: 24 }, (_, i) => (
             <div
               // biome-ignore lint/suspicious/noArrayIndexKey: static placeholders
               key={i}
@@ -577,9 +554,9 @@ function ChartSkeleton() {
       </div>
 
       <div
-        className="flex items-end gap-[3px]"
+        className="flex items-end gap-[6px]"
         style={{
-          height: 90,
+          height: PRECIP_HEIGHT,
           paddingLeft: PLOT_INSET.left,
           paddingRight: PLOT_INSET.right,
           paddingTop: CHART_MARGIN.top,
@@ -643,6 +620,136 @@ function PlotRow({
       </div>
     </div>
   );
+}
+
+/** Every `stepHours` from the first clock-aligned hour in `domain`, e.g.
+ * 00/03/06… for a step of 3, in the forecast's timezone. */
+function clockTicks(domain: Domain, stepHours: number): number[] {
+  const startHour = zonedHour(new Date(domain.start));
+  let day = zonedDayKey(new Date(domain.start));
+  let hour = Math.ceil(startHour / stepHours) * stepHours;
+  if (hour >= 24) {
+    hour -= 24;
+    day = addDays(day, 1);
+  }
+  let t = instantFromZoned(day, hour).getTime();
+
+  const ticks: number[] = [];
+  while (t <= domain.end) {
+    ticks.push(t);
+    t += stepHours * MS_PER_HOUR;
+  }
+  return ticks;
+}
+
+/**
+ * Precipitation as one pair of bars (DMI, Yr) per few-hour bucket, drawn as
+ * plain elements rather than a chart-library bar series: the bars need a
+ * fixed share of their bucket's width, which is simpler to say in CSS than to
+ * coax out of a numeric axis. The scale steps 1-2-5 mm and never drops below
+ * 1 mm, so a drizzle stays a stub instead of filling the panel.
+ */
+function PrecipitationBars({
+  buckets,
+  domain,
+  dayTicks,
+  visible,
+}: {
+  buckets: PrecipBucket[];
+  domain: Domain;
+  dayTicks: number[];
+  visible: Record<ProviderId, boolean>;
+}) {
+  const shown = PROVIDER_IDS.filter((provider) => visible[provider]);
+  const max = precipScaleMax(
+    Math.max(
+      0,
+      ...buckets.flatMap((bucket) =>
+        shown.map((provider) => bucket[provider] ?? 0),
+      ),
+    ),
+  );
+  const dry = buckets.every((bucket) =>
+    shown.every((provider) => (bucket[provider] ?? 0) < 0.05),
+  );
+
+  return (
+    <div
+      className="relative"
+      style={{
+        height: PRECIP_HEIGHT,
+        paddingLeft: PLOT_INSET.left,
+        paddingRight: PLOT_INSET.right,
+        paddingTop: CHART_MARGIN.top,
+      }}
+    >
+      <span
+        className="numeric absolute left-0 top-0 text-[0.6875rem] text-ink-faint"
+        style={{ width: PLOT_INSET.left - 6, textAlign: "right" }}
+      >
+        {max} mm
+      </span>
+      <div className="relative h-full border-b border-line-strong">
+        <span className="absolute inset-x-0 top-0 border-t border-dashed border-line" />
+        {dayTicks.map((t) => (
+          <span
+            key={t}
+            className="absolute inset-y-0 w-px bg-line-strong"
+            style={{ left: xPercent(t, domain) }}
+          />
+        ))}
+        {dry && (
+          <span className="absolute inset-0 flex items-center justify-center text-xs text-ink-faint">
+            Ingen nedbør i sigte
+          </span>
+        )}
+        {buckets.map((bucket) => (
+          <div
+            key={bucket.start}
+            className="absolute inset-y-0 flex items-end justify-center gap-0.5"
+            style={{
+              left: xPercent(bucket.start, domain),
+              width: `${((bucket.end - bucket.start) / (domain.end - domain.start)) * 100}%`,
+            }}
+            title={precipTitle(bucket, shown)}
+          >
+            {shown.map((provider) => {
+              const value = bucket[provider];
+              // Anything that rounds to a tenth of a millimetre gets a visible
+              // stub, however small next to the scale.
+              const height =
+                value === null || value < 0.05
+                  ? "0"
+                  : `max(3px, ${(value / max) * 100}%)`;
+              return (
+                <span
+                  key={provider}
+                  className="rounded-t-[3px]"
+                  style={{
+                    // Each bar takes just under half its bucket, up to 12px.
+                    width: "min(12px, 38%)",
+                    height,
+                    backgroundColor: PROVIDER_COLOR_VAR[provider],
+                  }}
+                />
+              );
+            })}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function precipTitle(bucket: PrecipBucket, shown: ProviderId[]): string {
+  const span = `${formatClock(new Date(bucket.start))}–${formatClock(new Date(bucket.end))}`;
+  const values = shown
+    .filter((provider) => bucket[provider] !== null)
+    .map(
+      (provider) =>
+        `${PROVIDERS[provider].name} ${(bucket[provider] ?? 0).toFixed(1)} mm`,
+    );
+  return [span, ...values].join("\n");
 }
 
 function xPercent(

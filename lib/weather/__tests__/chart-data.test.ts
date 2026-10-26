@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { buildChartRows, resampleHourly } from "../chart-data";
+import {
+  bucketPrecipitation,
+  buildChartRows,
+  precipScaleMax,
+  resampleHourly,
+} from "../chart-data";
 import type { HourlyForecast } from "../types";
 
 function hour(overrides: Partial<HourlyForecast> = {}): HourlyForecast {
@@ -116,5 +121,61 @@ describe("buildChartRows", () => {
     const rows = buildChartRows(dmi, [], { start: T0, end: T0 });
     expect(rows[0].yrTemp).toBeNull();
     expect(rows[0].yrPrecip).toBeNull();
+  });
+});
+
+describe("bucketPrecipitation", () => {
+  const rows = [0, 1, 2, 3, 4, 5].map((i) => ({
+    time: T0 + i * HOUR_MS,
+    dmiTemp: 10,
+    yrTemp: 10,
+    dmiPrecip: i < 3 ? 1 : 0.5,
+    yrPrecip: i < 4 ? null : 2,
+  }));
+  const domain = { start: T0, end: T0 + 6 * HOUR_MS };
+
+  it("sums each provider's hours into the buckets the boundaries mark", () => {
+    const buckets = bucketPrecipitation(
+      rows,
+      domain,
+      [T0 + 3 * HOUR_MS],
+      3 * HOUR_MS,
+    );
+    expect(buckets).toEqual([
+      { start: T0, end: T0 + 3 * HOUR_MS, dmi: 3, yr: null },
+      { start: T0 + 3 * HOUR_MS, end: T0 + 6 * HOUR_MS, dmi: 1.5, yr: 4 },
+    ]);
+  });
+
+  it("keeps a partial bucket of at least half a step", () => {
+    const buckets = bucketPrecipitation(
+      rows,
+      domain,
+      [T0 - HOUR_MS, T0 + 2 * HOUR_MS, T0 + 5 * HOUR_MS],
+      3 * HOUR_MS,
+    );
+    expect(buckets.map((b) => (b.end - b.start) / HOUR_MS)).toEqual([2, 4]);
+    expect(buckets[0].dmi).toBe(2);
+  });
+
+  it("folds a sliver at either end into its neighbour", () => {
+    const buckets = bucketPrecipitation(
+      rows,
+      domain,
+      [T0 + HOUR_MS, T0 + 4 * HOUR_MS],
+      3 * HOUR_MS,
+    );
+    expect(buckets.map((b) => (b.end - b.start) / HOUR_MS)).toEqual([4, 2]);
+  });
+});
+
+describe("precipScaleMax", () => {
+  it("rounds up to a 1-2-5 step, never below 1 mm", () => {
+    expect(precipScaleMax(0)).toBe(1);
+    expect(precipScaleMax(0.4)).toBe(1);
+    expect(precipScaleMax(1.3)).toBe(2);
+    expect(precipScaleMax(4.9)).toBe(5);
+    expect(precipScaleMax(7)).toBe(10);
+    expect(precipScaleMax(12)).toBe(20);
   });
 });
