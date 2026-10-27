@@ -43,6 +43,7 @@ being reachable and in a good mood.
 | --- | --- | --- |
 | `WEATHER_CONTACT` | For production | Contact address embedded in the `User-Agent` sent to MET Norway, as [their terms require](https://developer.yr.no/doc/TermsOfService/). Defaults to this repository's URL. |
 | `WEATHER_MOCK` | No | Set to `1` to serve fixtures instead of calling the providers. |
+| `SITE_URL` | Outside Vercel | Public origin for canonical URLs, the sitemap and social cards, e.g. `https://dmiogyr.dk`. On Vercel the production domain is used automatically. |
 
 Copy `.env.example` to `.env.local` to set them.
 
@@ -73,9 +74,13 @@ app/
 │   ├── now-panel.tsx       # the "right now" headline
 │   ├── location-search.tsx # search box with suggestions
 │   ├── theme-toggle.tsx    # auto/light/dark in the header
+│   ├── place-page.tsx      # one place's page, shared by both routes
+│   ├── about.tsx           # explainer, FAQ, town links, structured data
 │   ├── weather-icon.tsx    # inline SVG icon set
 │   └── ui.tsx              # shared primitives and provider styling
-└── page.tsx                # reads ?sted= and renders the client app
+├── vejret/[id]/[[...slug]]/page.tsx  # /vejret/<GeoNames id>/<name>
+├── page.tsx                # the front page; redirects old ?sted= links
+├── sitemap.ts, robots.ts, manifest.ts, opengraph-image.tsx
 
 lib/weather/
 ├── types.ts                # HourlyForecast, the shared shape
@@ -164,10 +169,26 @@ rather than relying on teal versus indigo.
 Places are found through the same search index dmi.dk's own search box uses
 (`/solr/city_core/select`), so every suggestion is somewhere DMI forecasts for,
 villages included, with nothing in this repo to keep up to date. A place is
-identified by DMI's GeoNames id (`?sted=2614481`); its coordinates, which Yr
-needs, come from DMI's forecast response for that id, so resolving a new place
-and fetching its DMI forecast are one upstream call. The old town slugs
-(`?sted=roskilde`) still work.
+identified by DMI's GeoNames id; its coordinates, which Yr needs, come from
+DMI's forecast response for that id, so resolving a new place and fetching its
+DMI forecast are one upstream call.
+
+Each place has one URL, `/vejret/<GeoNames id>/<name>` (e.g.
+`/vejret/2614481/roskilde`), modelled on dmi.dk's own location pages. A missing
+or misspelt name and the older `/?sted=roskilde` or `/?sted=2614481` links all
+308 to it; an id that is not a number is a 404. These need real status codes,
+which is why there is no root `loading.tsx`: a loading boundary makes the page
+stream, and a streamed page can no longer redirect or 404 with the right status.
+
+### Search engines
+
+Every place page has its own title ("Vejret i Roskilde | DMI og Yr side om
+side"), description, canonical URL, Open Graph and Twitter card, and
+`WebPage`/`Place`/`FAQPage` structured data. A server-rendered section under the
+forecast explains DMI versus Yr and links to the other towns; the sitemap lists
+the front page and the built-in towns. Set `SITE_URL` (or deploy on Vercel,
+whose production domain is picked up automatically) so these carry the right
+domain; it is read at build time for the sitemap and robots.txt.
 
 ## Deploying
 

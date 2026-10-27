@@ -9,6 +9,7 @@ import {
   useState,
   useTransition,
 } from "react";
+import { placePath } from "@/lib/site";
 import { groupByDay, summariseDay } from "@/lib/weather/aggregate";
 import type { Location } from "@/lib/weather/locations";
 import type { PlaceSuggestion } from "@/lib/weather/providers/dmi-search";
@@ -29,6 +30,7 @@ import { ThemeToggle } from "./theme-toggle";
 import { PROVIDER_STYLES, RefreshIcon, Skeleton, WarningIcon } from "./ui";
 
 const STORAGE_KEY = "dmiogyr:location";
+const RESTORED_KEY = "dmiogyr:restored";
 const NOW_COLLAPSED_KEY = "dmiogyr:now-hidden";
 
 /*
@@ -41,6 +43,21 @@ function readStoredLocation(): string | null {
     return window.localStorage.getItem(STORAGE_KEY);
   } catch {
     return null;
+  }
+}
+
+/**
+ * True when this tab has already had its chance to restore the last place;
+ * marks it as had either way. A blocked sessionStorage reads as "already
+ * restored", erring towards leaving the visitor where they are.
+ */
+function claimRestore(): boolean {
+  try {
+    if (window.sessionStorage.getItem(RESTORED_KEY)) return true;
+    window.sessionStorage.setItem(RESTORED_KEY, "1");
+    return false;
+  } catch {
+    return true;
   }
 }
 
@@ -67,13 +84,6 @@ function storeNowCollapsed(hidden: boolean): void {
   } catch {
     // Ignored on purpose.
   }
-}
-
-/** The page for a place: the URL is where the chosen place lives. */
-function placeHref(id: string): string {
-  const url = new URL(window.location.href);
-  url.searchParams.set("sted", id);
-  return `${url.pathname}${url.search}`;
 }
 
 /** Yr reaches nine days out; beyond that neither provider has anything. */
@@ -114,10 +124,13 @@ async function loadForecast(
 export function Forecast({
   location,
   unresolved = false,
+  about,
 }: {
   location: Location;
   /** The URL named a place DMI could not find; `location` is the default. */
   unresolved?: boolean;
+  /** Server-rendered explainer, placed between the forecast and the footer. */
+  about?: React.ReactNode;
 }) {
   const router = useRouter();
   const [switching, startSwitching] = useTransition();
@@ -149,12 +162,18 @@ export function Forecast({
     return () => clearInterval(timer);
   }, []);
 
-  // Restore the last-used place when the URL does not name one.
+  // On the front page, move on to the last-used place, once per tab: going
+  // back to the front page on purpose must not bounce straight off it again.
+  // The place's page redirects a bare id (or an old slug) to the full URL.
   useEffect(() => {
-    if (new URLSearchParams(window.location.search).has("sted")) return;
+    if (window.location.pathname !== "/" || claimRestore()) return;
     const saved = readStoredLocation();
     if (saved && saved !== location.id) {
-      startSwitching(() => router.replace(placeHref(saved), { scroll: false }));
+      startSwitching(() =>
+        router.replace(`/vejret/${encodeURIComponent(saved)}`, {
+          scroll: false,
+        }),
+      );
     }
   }, [location.id, router]);
 
@@ -232,9 +251,7 @@ export function Forecast({
     storeLocation(place.id);
     // The server resolves the place (and warms DMI's cache for it) as part
     // of rendering the new page.
-    startSwitching(() =>
-      router.replace(placeHref(place.id), { scroll: false }),
-    );
+    startSwitching(() => router.push(placePath(place), { scroll: false }));
   };
 
   const retry = (provider: ProviderId) => reload(location.id, [provider]);
@@ -393,6 +410,8 @@ export function Forecast({
 
         <DmiExtrasBottom extras={extras} loading={extrasLoading} />
       </div>
+
+      {about}
 
       <footer className="mt-8 space-y-1 text-sm text-ink-faint">
         <p>
