@@ -102,14 +102,11 @@ export function ForecastChart({
   now,
   loading,
   location,
-  actions,
 }: {
   forecasts: Partial<Record<ProviderId, ForecastResponse>>;
   now: Date;
   loading: boolean;
   location: Location;
-  /** Extra controls for the header, before the source toggles. */
-  actions?: React.ReactNode;
 }) {
   const sectionRef = useRef<HTMLElement>(null);
   const width = useElementWidth(sectionRef);
@@ -197,8 +194,14 @@ export function ForecastChart({
             Math.ceil(MIN_DAY_LABEL_WIDTH / (plotWidth / HORIZON_DAYS)),
           )
         : 1;
+    // A label that starts too close to the right edge would run off it.
+    const lastStart =
+      domain.end -
+      (MIN_DAY_LABEL_WIDTH / Math.max(plotWidth, 1)) *
+        (domain.end - domain.start);
     return headers
       .filter((_, index) => index % stride === 0)
+      .filter(({ time }) => plotWidth <= 0 || time <= lastStart)
       .map(({ time, day }) => ({
         time,
         // "I dag" and "I morgen" read best; further out, the weekday in full
@@ -212,7 +215,7 @@ export function ForecastChart({
                   : danishWeekday(day).slice(0, 3)
               } ${Number(day.split("-")[2])}.`,
       }));
-  }, [domain.start, dayTicks, now, plotWidth]);
+  }, [domain.start, domain.end, dayTicks, now, plotWidth]);
 
   /** Every `iconStep` hours from the first such boundary in range, aligned to
    * the clock (00/06/12/18) rather than offset from "now" — both the icon row
@@ -277,7 +280,6 @@ export function ForecastChart({
           )}
         </h2>
         <div className="flex items-center gap-2">
-          {actions}
           {PROVIDER_IDS.map((provider) => (
             <SourceToggle
               key={provider}
@@ -684,10 +686,10 @@ function PrecipitationBars({
       }}
     >
       <span
-        className="numeric absolute left-0 top-0 text-[0.6875rem] text-ink-faint"
+        className="numeric absolute left-0 top-0 whitespace-nowrap text-[0.6875rem] text-ink-faint"
         style={{ width: PLOT_INSET.left - 6, textAlign: "right" }}
       >
-        {max} mm
+        {max}mm
       </span>
       <div className="relative h-full border-b border-line-strong">
         <span className="absolute inset-x-0 top-0 border-t border-dashed border-line" />

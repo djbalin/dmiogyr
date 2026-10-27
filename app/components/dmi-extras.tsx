@@ -151,7 +151,7 @@ function RegionalForecastCard({
         DMI's udsigt for {regionalForecast.area || "området"}
       </h2>
       {regionalForecast.headline && (
-        <p className="mt-2 text-lg font-semibold text-ink">
+        <p className="mt-2 font-display text-xl font-semibold text-ink">
           {regionalForecast.headline}
         </p>
       )}
