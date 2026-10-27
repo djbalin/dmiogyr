@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Fraunces, Geist, Geist_Mono } from "next/font/google";
+import { SITE_NAME, siteUrl } from "@/lib/site";
 import { THEME_INIT_SCRIPT } from "./components/theme";
 import "./globals.css";
 
@@ -17,20 +18,36 @@ const fraunces = Fraunces({
 });
 
 export const metadata: Metadata = {
+  metadataBase: siteUrl(),
   title: {
-    default: "DMI og Yr — sammenlign vejrudsigter",
-    template: "%s — DMI og Yr",
+    default: "DMI og Yr: Vejret fra DMI og Yr side om side",
+    template: `%s | ${SITE_NAME}`,
   },
   description:
-    "Se DMI's og Yr's vejrudsigt for danske byer side om side, time for time, og find ud af hvor de er uenige.",
-  applicationName: "DMI og Yr",
+    "Se vejret fra DMI og Yr side om side, time for time. Sammenlign de to vejrudsigter for din by og se, hvor de er uenige om temperatur, regn og vind.",
+  applicationName: SITE_NAME,
+  // Google ignores this tag; Bing and smaller engines may still read it.
+  keywords: [
+    "dmi og yr",
+    "dmi",
+    "yr",
+    "vejret",
+    "vejr",
+    "vejrudsigt",
+    "vejret i morgen",
+    "dmi vejr",
+    "yr vejr",
+    "byvejr",
+    "dmi eller yr",
+    "sammenlign vejrudsigter",
+  ],
   openGraph: {
-    title: "DMI og Yr — sammenlign vejrudsigter",
-    description:
-      "To vejrudsigter for den samme by, side om side, time for time.",
+    siteName: SITE_NAME,
     locale: "da_DK",
     type: "website",
   },
+  twitter: { card: "summary_large_image" },
+  formatDetection: { telephone: false },
 };
 
 export const viewport: Viewport = {
