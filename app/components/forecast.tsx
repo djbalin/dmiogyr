@@ -29,7 +29,7 @@ import { ThemeToggle } from "./theme-toggle";
 import { PROVIDER_STYLES, RefreshIcon, Skeleton, WarningIcon } from "./ui";
 
 const STORAGE_KEY = "dmiogyr:location";
-const NOW_HIDDEN_KEY = "dmiogyr:now-hidden";
+const NOW_COLLAPSED_KEY = "dmiogyr:now-hidden";
 
 /*
  * localStorage throws outright when a browser is set to block site data, so
@@ -52,18 +52,18 @@ function storeLocation(id: string): void {
   }
 }
 
-function readNowHidden(): boolean {
+function readNowCollapsed(): boolean {
   try {
-    return window.localStorage.getItem(NOW_HIDDEN_KEY) === "1";
+    return window.localStorage.getItem(NOW_COLLAPSED_KEY) === "1";
   } catch {
     return false;
   }
 }
 
-function storeNowHidden(hidden: boolean): void {
+function storeNowCollapsed(hidden: boolean): void {
   try {
-    if (hidden) window.localStorage.setItem(NOW_HIDDEN_KEY, "1");
-    else window.localStorage.removeItem(NOW_HIDDEN_KEY);
+    if (hidden) window.localStorage.setItem(NOW_COLLAPSED_KEY, "1");
+    else window.localStorage.removeItem(NOW_COLLAPSED_KEY);
   } catch {
     // Ignored on purpose.
   }
@@ -133,13 +133,13 @@ export function Forecast({
   // the first client render agree and React does not report a mismatch.
   const [now, setNow] = useState<Date | null>(null);
   // Read after mount, like the stored town: the server cannot see it.
-  const [nowHidden, setNowHidden] = useState(false);
+  const [nowCollapsed, setNowCollapsed] = useState(false);
 
-  useEffect(() => setNowHidden(readNowHidden()), []);
+  useEffect(() => setNowCollapsed(readNowCollapsed()), []);
 
-  const toggleNowHidden = (hidden: boolean) => {
-    setNowHidden(hidden);
-    storeNowHidden(hidden);
+  const toggleNowCollapsed = (hidden: boolean) => {
+    setNowCollapsed(hidden);
+    storeNowCollapsed(hidden);
   };
 
   useEffect(() => {
@@ -308,10 +308,12 @@ export function Forecast({
           them. With room: title, search, theme in a row. */}
       <header className="mb-6 flex flex-wrap items-center gap-x-4 gap-y-3">
         <div className="min-w-0 flex-1">
-          <h1 className="text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
+          <h1 className="font-display text-4xl font-semibold tracking-tight text-ink sm:text-5xl">
             DMI og Yr
           </h1>
-          <p className="mt-1 text-ink-muted">To vejrudsigter, side om side.</p>
+          <p className="mt-1 font-display text-base italic text-ink-muted sm:text-lg">
+            To vejrudsigter, side om side.
+          </p>
         </div>
         <LocationSearch
           value={location}
@@ -329,10 +331,13 @@ export function Forecast({
       </header>
 
       <div className="space-y-4">
+        {/* Expanded, "Lige nu" is a column beside the graph once there is
+            room; collapsed, it is a slim bar above it and the graph gets the
+            full width. On a phone it sits above the graph either way. */}
         <div
           className={
-            nowHidden
-              ? ""
+            nowCollapsed
+              ? "flex flex-col gap-4"
               : "grid gap-4 lg:grid-cols-[minmax(0,1fr)_15rem] lg:items-stretch"
           }
         >
@@ -341,30 +346,19 @@ export function Forecast({
             now={now ?? new Date()}
             loading={anyLoading}
             location={location}
-            actions={
-              nowHidden && (
-                <button
-                  type="button"
-                  onClick={() => toggleNowHidden(false)}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-3 py-1.5 text-xs font-medium text-ink-muted transition-colors hover:border-line-strong hover:text-ink"
-                >
-                  Vis lige nu
-                </button>
-              )
+          />
+          <NowPanel
+            forecasts={forecasts}
+            sun={days[0]?.sun ?? null}
+            dmiSun={extras?.details?.sun[0] ?? null}
+            now={now ?? new Date()}
+            loading={anyLoading}
+            collapsed={nowCollapsed}
+            onToggle={() => toggleNowCollapsed(!nowCollapsed)}
+            className={
+              nowCollapsed ? "order-first" : "order-first lg:order-none"
             }
           />
-          {!nowHidden && (
-            <NowPanel
-              forecasts={forecasts}
-              sun={days[0]?.sun ?? null}
-              dmiSun={extras?.details?.sun[0] ?? null}
-              now={now ?? new Date()}
-              loading={anyLoading}
-              onHide={() => toggleNowHidden(true)}
-              // Above the graph on a phone, beside it once there is room.
-              className="order-first lg:order-none"
-            />
-          )}
         </div>
 
         <DmiExtrasTop extras={extras} />

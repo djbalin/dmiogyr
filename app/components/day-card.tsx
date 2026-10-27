@@ -177,7 +177,7 @@ export function DayCard({
           {/* Desktop */}
           <div className="hidden items-center gap-3 lg:flex">
             <div className={DAY_LEAD}>
-              <span className="block text-base font-semibold text-ink">
+              <span className="block font-display text-lg font-semibold text-ink">
                 {label}
               </span>
               <div className="mt-0.5 flex items-center gap-1.5">
@@ -205,7 +205,9 @@ export function DayCard({
           {/* Mobile */}
           <div className="lg:hidden">
             <div className="mb-2 flex items-baseline justify-between gap-2">
-              <span className="text-base font-semibold text-ink">{label}</span>
+              <span className="font-display text-lg font-semibold text-ink">
+                {label}
+              </span>
               <span className="flex items-center gap-2">
                 {spread !== null && spread >= 1 && (
                   <SpreadBadge spread={spread} />

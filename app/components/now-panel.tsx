@@ -1,5 +1,6 @@
 "use client";
 
+import { useId } from "react";
 import { conditionFor, hourAt } from "@/lib/weather/aggregate";
 import { CONDITION_LABELS } from "@/lib/weather/conditions";
 import type { DmiLocationDetails } from "@/lib/weather/providers/dmi-extras";
@@ -11,6 +12,7 @@ import {
   type ProviderId,
 } from "@/lib/weather/types";
 import {
+  ChevronIcon,
   PROVIDER_STYLES,
   ProviderTag,
   Skeleton,
@@ -24,8 +26,9 @@ import { WeatherIcon } from "./weather-icon";
  * today's sunrise, sunset and day length.
  *
  * Deliberately compact — it sits in a narrow column beside the graph on wide
- * screens (above it on a phone) and can be hidden entirely, letting the graph
- * take the full width.
+ * screens (above it on a phone). Its heading folds it up and down like the
+ * day rows: collapsed, it is a one-line bar above the graph showing just the
+ * two temperatures, and the graph takes the full width.
  */
 export function NowPanel({
   forecasts,
@@ -33,7 +36,8 @@ export function NowPanel({
   dmiSun,
   now,
   loading,
-  onHide,
+  collapsed,
+  onToggle,
   className = "",
 }: {
   forecasts: Partial<Record<ProviderId, ForecastResponse>>;
@@ -42,7 +46,8 @@ export function NowPanel({
   dmiSun: DmiLocationDetails["sun"][number] | null;
   now: Date;
   loading: boolean;
-  onHide: () => void;
+  collapsed: boolean;
+  onToggle: () => void;
   className?: string;
 }) {
   const entries = PROVIDER_IDS.map((provider) => ({
@@ -50,36 +55,69 @@ export function NowPanel({
     hour: forecasts[provider] ? hourAt(forecasts[provider].hours, now) : null,
   })).filter((entry) => entry.hour);
 
+  const bodyId = useId();
+
+  // A disclosure heading: the whole row is the button, as on the day rows.
   const header = (
-    <div className="flex items-center justify-between gap-2">
-      <h2 className="text-xs font-semibold uppercase tracking-wider text-ink-faint">
-        Lige nu
-      </h2>
+    <h2>
       <button
         type="button"
-        onClick={onHide}
-        aria-label="Skjul Lige nu"
-        title="Skjul — lad grafen fylde hele bredden"
-        className="-mr-1.5 flex h-7 w-7 items-center justify-center rounded-full text-ink-faint transition-colors hover:bg-surface-muted hover:text-ink"
+        onClick={onToggle}
+        aria-expanded={!collapsed}
+        aria-controls={bodyId}
+        className="-m-2 flex w-[calc(100%+1rem)] cursor-pointer items-center gap-3 rounded-xl p-2 text-left transition-colors hover:bg-surface-muted"
       >
-        <CollapseIcon />
+        <span className="text-xs font-semibold uppercase tracking-wider text-ink-faint">
+          Lige nu
+        </span>
+        {collapsed && (
+          <span className="flex items-baseline gap-3">
+            {entries.map(({ provider, hour }) => (
+              <span
+                key={provider}
+                className={`numeric text-base font-semibold ${PROVIDER_STYLES[provider].text}`}
+              >
+                <span className="sr-only">
+                  {provider === "dmi" ? "DMI" : "Yr"}{" "}
+                </span>
+                {Math.round(hour?.temperature ?? 0)}°
+              </span>
+            ))}
+          </span>
+        )}
+        <span className="ml-auto text-ink-faint">
+          <ChevronIcon open={!collapsed} />
+        </span>
       </button>
-    </div>
+    </h2>
   );
 
-  const card = `flex flex-col rounded-2xl border border-line bg-surface p-4 shadow-[var(--shadow)] ${className}`;
+  const card = `flex flex-col rounded-2xl border border-line bg-surface shadow-[var(--shadow)] ${
+    collapsed ? "px-4 py-3" : "p-4"
+  } ${className}`;
+
+  if (collapsed) {
+    return (
+      <section aria-label="Vejret lige nu" className={card}>
+        {header}
+        <div id={bodyId} hidden />
+      </section>
+    );
+  }
 
   if (loading && entries.length === 0) {
     return (
       <section aria-label="Vejret lige nu" aria-busy="true" className={card}>
         {header}
-        <div className="mt-3 flex items-center gap-3">
-          <Skeleton className="h-11 w-11 rounded-full" />
-          <Skeleton className="h-4 w-24" />
-        </div>
-        <div className="mt-4 space-y-4">
-          <Skeleton className="h-12 w-full" />
-          <Skeleton className="h-12 w-full" />
+        <div id={bodyId}>
+          <div className="mt-3 flex items-center gap-3">
+            <Skeleton className="h-11 w-11 rounded-full" />
+            <Skeleton className="h-4 w-24" />
+          </div>
+          <div className="mt-4 space-y-4">
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
+          </div>
         </div>
       </section>
     );
@@ -104,77 +142,79 @@ export function NowPanel({
     <section aria-label="Vejret lige nu" className={card}>
       {header}
 
-      <div className="mt-2 flex items-center gap-3">
-        <WeatherIcon
-          condition={condition}
-          night={night}
-          size={44}
-          decorative
-          className="shrink-0"
-        />
-        <p className="text-sm font-medium text-ink">
-          {CONDITION_LABELS[condition]}
-        </p>
-      </div>
+      <div id={bodyId} className="flex flex-1 flex-col">
+        <div className="mt-2 flex items-center gap-3">
+          <WeatherIcon
+            condition={condition}
+            night={night}
+            size={44}
+            decorative
+            className="shrink-0"
+          />
+          <p className="text-sm font-medium text-ink">
+            {CONDITION_LABELS[condition]}
+          </p>
+        </div>
 
-      <div className="mt-3 grid flex-1 grid-cols-2 content-start gap-3 lg:grid-cols-1">
-        {entries.map(({ provider, hour }) => {
-          if (!hour) return null;
-          const styles = PROVIDER_STYLES[provider];
-          return (
-            <div key={provider}>
-              <div className="flex items-baseline gap-2">
-                <ProviderTag provider={provider} />
-                <p
-                  className={`numeric text-3xl font-semibold leading-none ${styles.text}`}
-                >
-                  {Math.round(hour.temperature)}°
-                </p>
+        <div className="mt-3 grid flex-1 grid-cols-2 content-start gap-3 lg:grid-cols-1">
+          {entries.map(({ provider, hour }) => {
+            if (!hour) return null;
+            const styles = PROVIDER_STYLES[provider];
+            return (
+              <div key={provider}>
+                <div className="flex items-baseline gap-2">
+                  <ProviderTag provider={provider} />
+                  <p
+                    className={`numeric text-3xl font-semibold leading-none ${styles.text}`}
+                  >
+                    {Math.round(hour.temperature)}°
+                  </p>
+                </div>
+                <dl className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-ink-muted">
+                  <div className="flex items-center gap-1">
+                    <dt className="sr-only">Vind</dt>
+                    <dd className="numeric flex items-center gap-1">
+                      <WindArrow degrees={hour.windDirection} size={12} />
+                      {Math.round(hour.windSpeed)} m/s
+                    </dd>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <dt className="sr-only">Nedbør</dt>
+                    <dd className="numeric">
+                      {hour.precipitation >= 0.05
+                        ? `${hour.precipitation.toFixed(1)} mm`
+                        : "tørt"}
+                    </dd>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <dt className="sr-only">Skydække</dt>
+                    <dd className="numeric">
+                      {Math.round(hour.cloudCover)}% skyer
+                    </dd>
+                  </div>
+                </dl>
               </div>
-              <dl className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-ink-muted">
-                <div className="flex items-center gap-1">
-                  <dt className="sr-only">Vind</dt>
-                  <dd className="numeric flex items-center gap-1">
-                    <WindArrow degrees={hour.windDirection} size={12} />
-                    {Math.round(hour.windSpeed)} m/s
-                  </dd>
-                </div>
-                <div className="flex items-center gap-1">
-                  <dt className="sr-only">Nedbør</dt>
-                  <dd className="numeric">
-                    {hour.precipitation >= 0.05
-                      ? `${hour.precipitation.toFixed(1)} mm`
-                      : "tørt"}
-                  </dd>
-                </div>
-                <div className="flex items-center gap-1">
-                  <dt className="sr-only">Skydække</dt>
-                  <dd className="numeric">
-                    {Math.round(hour.cloudCover)}% skyer
-                  </dd>
-                </div>
-              </dl>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
+
+        <SunRow sun={sun} dmiSun={dmiSun} />
+
+        {disagreement !== null && (
+          <p className="mt-3 border-t border-line pt-2.5 text-xs text-ink-muted">
+            {disagreement === 0 ? (
+              <>
+                <strong className="text-ink">Enige</strong> om temperaturen.
+              </>
+            ) : (
+              <>
+                <strong className="text-ink">{disagreement}° uenige</strong> om
+                temperaturen.
+              </>
+            )}
+          </p>
+        )}
       </div>
-
-      <SunRow sun={sun} dmiSun={dmiSun} />
-
-      {disagreement !== null && (
-        <p className="mt-3 border-t border-line pt-2.5 text-xs text-ink-muted">
-          {disagreement === 0 ? (
-            <>
-              <strong className="text-ink">Enige</strong> om temperaturen.
-            </>
-          ) : (
-            <>
-              <strong className="text-ink">{disagreement}° uenige</strong> om
-              temperaturen.
-            </>
-          )}
-        </p>
-      )}
     </section>
   );
 }
@@ -235,19 +275,4 @@ function formatDayLength(seconds: number): string {
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.round((seconds % 3600) / 60);
   return `${hours} t ${minutes} m`;
-}
-
-function CollapseIcon() {
-  return (
-    <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true">
-      <path
-        d="m8 5 5 5-5 5"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
 }
